@@ -5,6 +5,8 @@
 **AES-256 written from FIPS-197 in Lean 4, with its correctness and the structural facts behind its
 security proved, and every proof re-derived by a second, independent kernel.**
 
+![The four-round bound in Lean Studio: the theorem with Tenet's check mark in the gutter, the goal at the cursor, and Tenet's verdict on all 353 declarations](docs/images/leanstudio-widetrail.png)
+
 The cipher is the standard's own algorithms, `Cipher`, `InvCipher` and `KeyExpansion`, with the S-box
 tables copied from it. On top of that:
 
@@ -93,6 +95,9 @@ OK: 1024 blocks under 64 random keys agree with OpenSSL (seed 1492312056)
 **[Lean Studio](https://github.com/keithadler/leanstudio)** is the editor this was written for. Build
 gives each declaration Tenet's badge in the gutter, and its project map summarizes the result:
 
+![The round trip in Lean Studio, mid-proof: the tactic state, each proof step, and every declaration verified](docs/images/leanstudio-roundtrip.png)
+
+
 ```
 $ python3 tools/leanstudio.py verify project_map
 == verify
@@ -110,6 +115,10 @@ step, with the goals before and after every tactic.
 declaration: its statement, docstring and source, what it uses and what uses it, the axioms it rests on,
 and Tenet's verdict. CI builds it on every push and publishes it from `main`; `tools/leanviz.sh --serve`
 builds and serves it locally.
+
+| | |
+| --- | --- |
+| ![LeanViz home page for this project: 642 declarations, every one of 65,446 re-checked by Tenet, none rejected](docs/images/leanviz-home.png) | ![LeanViz page for decrypt_encrypt: its statement, what it uses, and the axioms it rests on](docs/images/leanviz-decrypt-encrypt.png) |
 
 ## Layout
 
