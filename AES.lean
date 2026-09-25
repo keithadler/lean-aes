@@ -5,3 +5,7 @@ import AES.Spec
 import AES.Vectors
 import AES.Linear
 import AES.RoundTrip
+import AES.Branch
+import AES.WideTrail
+import AES.Digits
+import AES.SBoxProps
