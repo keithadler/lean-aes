@@ -1,0 +1,10 @@
+name = "aes"
+version = "0.1.0"
+defaultTargets = ["AES", "aes256"]
+
+[[lean_lib]]
+name = "AES"
+
+[[lean_exe]]
+name = "aes256"
+root = "Main"
