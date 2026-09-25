@@ -1,0 +1,18 @@
+// Commands of this project's own. Lean Studio lists each in the command palette as "Project: <title>".
+// Build (Cmd/Ctrl+B) already re-checks every declaration with Tenet; these go further.
+[
+  { "title": "Verify everything (Lean, OpenSSL, Tenet)", "program": "tools/verify.sh", "args": [],
+    "detail": "build, cross-check against OpenSSL, Tenet over the whole import closure, the audit and the headline axioms" },
+  { "title": "Tenet: re-check the whole import closure", "program": "tenet", "args": ["check", "${root}", "--all", "--report", "check.json"],
+    "detail": "an independent kernel re-derives every declaration, Lean's core library included" },
+  { "title": "Tenet: audit", "program": "tenet", "args": ["audit", "${root}"],
+    "detail": "how many declarations rest on nothing beyond the three standard axioms" },
+  { "title": "Tenet: axioms of the name at the cursor", "program": "tenet", "args": ["axioms", "${root}", "AES.${word}"] },
+  { "title": "Tenet: why does the name at the cursor rest on what it rests on", "program": "tenet", "args": ["why", "${root}", "AES.${word}"] },
+  { "title": "Cross-check against OpenSSL", "program": "python3", "args": ["tools/crosscheck.py"],
+    "detail": "random keys and blocks through the compiled specification and through OpenSSL" },
+  { "title": "Encrypt the FIPS-197 C.3 block", "program": "lake",
+    "args": ["exe", "aes256", "encrypt", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", "00112233445566778899aabbccddeeff"] },
+  { "title": "LeanViz: build and serve the navigator for this project", "program": "tools/leanviz.sh", "args": ["--serve"],
+    "detail": "every declaration as a page, with Tenet's verdict, at http://localhost:8787/?p=aes" }
+]

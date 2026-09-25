@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GF.lean · proof walkthrough</title>
+<style>
+:root { --bg:#fbfaf8; --fg:#1d1d1f; --dim:#6b6b70; --card:#ffffff; --line:#e4e2dd; --accent:#3f6fd8; --ok:#1f8a3b; --code:#f3f1ec; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16171a; --fg:#e6e6e9; --dim:#9a9aa3; --card:#1e2024; --line:#2e3036; --accent:#7aa2f7; --ok:#4cc36b; --code:#23252b; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; } h2 { font-size: 20px; margin: 0 0 12px; }
+.sub, .line, .words, footer, .explain { color: var(--dim); }
+.line { font-size: 13px; font-weight: normal; margin-left: 6px; }
+a { color: var(--accent); }
+.button { display:inline-block; padding:6px 14px; border:1px solid var(--accent); border-radius:6px; text-decoration:none; }
+nav { margin: 20px 0; display:flex; flex-wrap:wrap; gap:6px 12px; font-size:14px; }
+pre, code { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+pre.code { background: var(--code); padding: 12px 14px; border-radius: 8px; }
+.proof { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; }
+.state { margin-top: 8px; }
+.state.start { margin: 12px 0 4px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-bottom: 4px; }
+.goal { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 4px 0; background: var(--code); border-radius: 0 6px 6px 0; }
+.none { color: var(--ok); font-weight: 600; }
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 16px 0 0; }
+.step { counter-increment: s; position: relative; padding: 12px 12px 12px 44px; border-top: 1px solid var(--line); outline: none; }
+.step::before { content: counter(s); position: absolute; left: 8px; top: 12px; width: 24px; height: 24px; border-radius: 50%;
+                background: var(--code); color: var(--dim); font-size: 13px; text-align: center; line-height: 24px; }
+.step.done::before { background: var(--ok); color: #fff; content: "✓"; }
+.step.current { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
+.tactic { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.tactic code { font-weight: 600; }
+.change { font-size: 13px; color: var(--dim); }
+.explain { margin: 4px 0 0; font-size: 14px; }
+details.source { margin-top: 24px; } footer { margin-top: 32px; font-size: 13px; }</style></head><body>
+<main>
+<header><h1>GF.lean</h1><p class="sub">A step-by-step walkthrough of 24 proofs. Each step shows the tactic, what it does, and the goals Lean is left with. Use ← and → to step through.</p><p><a class="button" href="https://live.lean-lang.org/#code=import%20AES.Basic%0A%0A%2F-%21%0A%23%20Arithmetic%20in%20GF%282%E2%81%B8%29%0A%0AFIPS-197%20%C2%A74.%20Addition%20is%20XOR.%20Multiplication%20is%20defined%20the%20way%20%C2%A74.2%20defines%20it%3A%20%60xtime%60%20multiplies%20by%0A%60x%60%20and%20reduces%20by%20%60m%28x%29%20%3D%20x%E2%81%B8%20%2B%20x%E2%81%B4%20%2B%20x%C2%B3%20%2B%20x%20%2B%201%60%2C%20and%20a%20general%20product%20is%20the%20sum%20of%20%60xtime%E2%81%B1%20b%60%20over%0Athe%20bits%20%60i%60%20of%20%60a%60.%0A%0AThe%20field%20laws%20are%20proved%20rather%20than%20enumerated.%20Everything%20follows%20from%20one%20fact%2C%20that%20%60xtime%60%20is%0Aadditive%2C%20which%20is%20a%20bit-level%20argument%20about%20a%20shift%20and%20a%20conditional%20XOR.%20From%20it%2C%20multiplication%20by%0Aany%20%60a%60%20is%20additive%20and%20commutes%20with%20%60xtime%60%3B%20that%20makes%20any%20two%20multiplications%20commute%2C%20and%0Acommutativity%20and%20associativity%20fall%20out%20by%20putting%20%601%60%20in%20the%20right%20place.%20The%20only%20facts%20checked%20by%0Arunning%20over%20all%20256%20bytes%20are%20the%20one-variable%20ones%3A%20%60a%20%E2%80%A2%201%20%3D%20a%60%20and%20%60b%20%E2%80%A2%20b%E2%81%BB%C2%B9%20%3D%201%60.%0A-%2F%0A%0Anamespace%20AES%0A%0Aset_option%20maxHeartbeats%200%0A%0A%2F--%20%60xTimes%60%2C%20FIPS-197%20%C2%A74.2%3A%20multiply%20by%20the%20polynomial%20%60x%60%2C%20reducing%20by%20%60m%28x%29%60%20when%20bit%207%20falls%20off.%20-%2F%0Adef%20xtime%20%28b%20%3A%20Byte%29%20%3A%20Byte%20%3A%3D%20if%20b%20%26%26%26%200x80%20%3D%200%20then%20b%20%3C%3C%3C%201%20else%20%28b%20%3C%3C%3C%201%29%20%5E%5E%5E%200x1b%0A%0A%2F--%20The%20loop%20behind%20%60mul%60%3A%20%60n%60%20more%20bits%20of%20%60a%60%20to%20read%2C%20%60b%60%20the%20current%20%60xtime%E2%81%B1%60%20of%20the%20multiplicand%2C%0A%60acc%60%20the%20sum%20so%20far.%20Structural%20on%20%60n%60%2C%20so%20the%20kernel%20runs%20it.%20-%2F%0Adef%20mulLoop%20%3A%20Nat%20%E2%86%92%20Byte%20%E2%86%92%20Byte%20%E2%86%92%20Byte%20%E2%86%92%20Byte%0A%20%20%7C%200%2C%20_%2C%20_%2C%20acc%20%3D%3E%20acc%0A%20%20%7C%20n%20%2B%201%2C%20a%2C%20b%2C%20acc%20%3D%3E%20mulLoop%20n%20%28a%20%3E%3E%3E%201%29%20%28xtime%20b%29%20%28if%20a%20%26%26%26%201%20%3D%200%20then%20acc%20else%20acc%20%5E%5E%5E%20b%29%0A%0A%2F--%20Multiplication%20in%20GF%282%E2%81%B8%29%2C%20written%20%60a%20%E2%80%A2%20b%60%20in%20FIPS-197%20%C2%A74.2.%20-%2F%0Adef%20mul%20%28a%20b%20%3A%20Byte%29%20%3A%20Byte%20%3A%3D%20mulLoop%208%20a%20b%200%0A%0A%2F--%20The%20multiplicative%20inverse%2C%20FIPS-197%20%C2%A74.4%3A%20%60b%E2%81%BB%C2%B9%20%3D%20b%C2%B2%E2%81%B5%E2%81%B4%60%2C%20and%20%600%E2%81%BB%C2%B9%20%3D%200%60.%20Computed%20by%20an%20addition%0Achain%2C%20%60254%20%3D%202%20%2B%204%20%2B%208%20%2B%2016%20%2B%2032%20%2B%2064%20%2B%20128%60.%20-%2F%0Adef%20inv%20%28b%20%3A%20Byte%29%20%3A%20Byte%20%3A%3D%0A%20%20let%20b2%20%3A%3D%20mul%20b%20b%0A%20%20let%20b4%20%3A%3D%20mul%20b2%20b2%0A%20%20let%20b8%20%3A%3D%20mul%20b4%20b4%0A%20%20let%20b16%20%3A%3D%20mul%20b8%20b8%0A%20%20let%20b32%20%3A%3D%20mul%20b16%20b16%0A%20%20let%20b64%20%3A%3D%20mul%20b32%20b32%0A%20%20let%20b128%20%3A%3D%20mul%20b64%20b64%0A%20%20mul%20b2%20%28mul%20b4%20%28mul%20b8%20%28mul%20b16%20%28mul%20b32%20%28mul%20b64%20b128%29%29%29%29%29%0A%0A%2F-%21%20%23%23%20XOR%20on%20bytes%20-%2F%0A%0Atheorem%20and_xor_distrib%20%28x%20y%20z%20%3A%20Byte%29%20%3A%20%28x%20%5E%5E%5E%20y%29%20%26%26%26%20z%20%3D%20%28x%20%26%26%26%20z%29%20%5E%5E%5E%20%28y%20%26%26%26%20z%29%20%3A%3D%20by%0A%20%20apply%20UInt8.toBitVec_inj.1%0A%20%20ext%20i%20hi%0A%20%20simp%20only%20%5BUInt8.toBitVec_and%2C%20UInt8.toBitVec_xor%2C%20BitVec.getElem_and%2C%20BitVec.getElem_xor%5D%0A%20%20cases%20x.toBitVec%5Bi%5D%20%3C%3B%3E%20cases%20y.toBitVec%5Bi%5D%20%3C%3B%3E%20simp%0A%0A%2F--%20Bit%207%20of%20a%20byte%20is%20either%20clear%20or%20set.%20-%2F%0Atheorem%20and_0x80%20%28x%20%3A%20Byte%29%20%3A%20x%20%26%26%26%200x80%20%3D%200%20%E2%88%A8%20x%20%26%26%26%200x80%20%3D%200x80%20%3A%3D%20by%0A%20%20have%20%3A%20allBytes%20%28fun%20x%20%3D%3E%20x%20%26%26%26%200x80%20%3D%3D%200%20%7C%7C%20x%20%26%26%26%200x80%20%3D%3D%200x80%29%20%3D%20true%20%3A%3D%20by%20decide%20%2Bkernel%0A%20%20simpa%20using%20allBytes_spec%20this%20x%0A%0A%2F-%21%20%23%23%20%60xtime%60%20is%20additive%20-%2F%0A%0Atheorem%20xor_xor_cancel%20%28a%20b%20k%20%3A%20Byte%29%20%3A%20%28a%20%5E%5E%5E%20k%29%20%5E%5E%5E%20%28b%20%5E%5E%5E%20k%29%20%3D%20a%20%5E%5E%5E%20b%20%3A%3D%20by%0A%20%20rw%20%5Bshow%20%28a%20%5E%5E%5E%20k%29%20%5E%5E%5E%20%28b%20%5E%5E%5E%20k%29%20%3D%20%28a%20%5E%5E%5E%20b%29%20%5E%5E%5E%20%28k%20%5E%5E%5E%20k%29%20by%20ac_rfl%2C%20UInt8.xor_self%2C%20UInt8.xor_zero%5D%0A%0Atheorem%20xtime_xor%20%28x%20y%20%3A%20Byte%29%20%3A%20xtime%20%28x%20%5E%5E%5E%20y%29%20%3D%20xtime%20x%20%5E%5E%5E%20xtime%20y%20%3A%3D%20by%0A%20%20unfold%20xtime%0A%20%20rw%20%5Band_xor_distrib%2C%20UInt8.shiftLeft_xor%5D%0A%20%20have%20h80%20%3A%20%280x80%20%3A%20Byte%29%20%E2%89%A0%200%20%3A%3D%20by%20decide%0A%20%20rcases%20and_0x80%20x%20with%20hx%20%7C%20hx%20%3C%3B%3E%20rcases%20and_0x80%20y%20with%20hy%20%7C%20hy%20%3C%3B%3E%0A%20%20%20%20simp%20only%20%5Bhx%2C%20hy%2C%20UInt8.xor_self%2C%20UInt8.xor_zero%2C%20UInt8.zero_xor%2C%20h80%2C%20%E2%86%93reduceIte%5D%20%3C%3B%3E%0A%20%20%20%20first%20%7C%20rfl%20%7C%20rw%20%5Bxor_xor_cancel%5D%20%7C%20ac_rfl%0A%0Atheorem%20xtime_zero%20%3A%20xtime%200%20%3D%200%20%3A%3D%20by%20decide%0A%0A%2F-%21%20%23%23%20Multiplication%20by%20a%20fixed%20%60a%60%20is%20additive%20and%20commutes%20with%20%60xtime%60%20-%2F%0A%0Atheorem%20mulLoop_xor%20%28n%20%3A%20Nat%29%20%28a%20b%20b%27%20acc%20acc%27%20%3A%20Byte%29%20%3A%0A%20%20%20%20mulLoop%20n%20a%20%28b%20%5E%5E%5E%20b%27%29%20%28acc%20%5E%5E%5E%20acc%27%29%20%3D%20mulLoop%20n%20a%20b%20acc%20%5E%5E%5E%20mulLoop%20n%20a%20b%27%20acc%27%20%3A%3D%20by%0A%20%20induction%20n%20generalizing%20a%20b%20b%27%20acc%20acc%27%20with%0A%20%20%7C%20zero%20%3D%3E%20rfl%0A%20%20%7C%20succ%20n%20ih%20%3D%3E%0A%20%20%20%20simp%20only%20%5BmulLoop%2C%20xtime_xor%5D%0A%20%20%20%20split%0A%20%20%20%20%C2%B7%20exact%20ih%20..%0A%20%20%20%20%C2%B7%20rw%20%5Bshow%20acc%20%5E%5E%5E%20acc%27%20%5E%5E%5E%20%28b%20%5E%5E%5E%20b%27%29%20%3D%20%28acc%20%5E%5E%5E%20b%29%20%5E%5E%5E%20%28acc%27%20%5E%5E%5E%20b%27%29%20by%20ac_rfl%5D%0A%20%20%20%20%20%20exact%20ih%20..%0A%0Atheorem%20mul_xor%20%28a%20b%20c%20%3A%20Byte%29%20%3A%20mul%20a%20%28b%20%5E%5E%5E%20c%29%20%3D%20mul%20a%20b%20%5E%5E%5E%20mul%20a%20c%20%3A%3D%20by%0A%20%20unfold%20mul%0A%20%20rw%20%5B%E2%86%90%20mulLoop_xor%2C%20UInt8.xor_self%5D%0A%0Atheorem%20mul_zero%20%28a%20%3A%20Byte%29%20%3A%20mul%20a%200%20%3D%200%20%3A%3D%20by%0A%20%20--%20%60m%20%3D%20m%20%5E%5E%5E%20m%60%20forces%20%60m%20%3D%200%60%0A%20%20have%20h%20%3A%3D%20mul_xor%20a%200%200%0A%20%20rw%20%5BUInt8.xor_self%2C%20UInt8.xor_self%5D%20at%20h%0A%20%20exact%20h%0A%0Atheorem%20xtime_mulLoop%20%28n%20%3A%20Nat%29%20%28a%20b%20acc%20%3A%20Byte%29%20%3A%0A%20%20%20%20xtime%20%28mulLoop%20n%20a%20b%20acc%29%20%3D%20mulLoop%20n%20a%20%28xtime%20b%29%20%28xtime%20acc%29%20%3A%3D%20by%0A%20%20induction%20n%20generalizing%20a%20b%20acc%20with%0A%20%20%7C%20zero%20%3D%3E%20rfl%0A%20%20%7C%20succ%20n%20ih%20%3D%3E%0A%20%20%20%20simp%20only%20%5BmulLoop%2C%20ih%5D%0A%20%20%20%20split%20%3C%3B%3E%20simp%20%5Bxtime_xor%5D%0A%0Atheorem%20xtime_mul%20%28a%20b%20%3A%20Byte%29%20%3A%20xtime%20%28mul%20a%20b%29%20%3D%20mul%20a%20%28xtime%20b%29%20%3A%3D%20by%0A%20%20show%20xtime%20%28mulLoop%208%20a%20b%200%29%20%3D%20mulLoop%208%20a%20%28xtime%20b%29%200%0A%20%20rw%20%5Bxtime_mulLoop%2C%20xtime_zero%5D%0A%0A%2F--%20Any%20multiplication%20commutes%20with%20any%20other%3A%20%60a%20%E2%80%A2%20%28c%20%E2%80%A2%20x%29%20%3D%20c%20%E2%80%A2%20%28a%20%E2%80%A2%20x%29%60.%20Multiplication%20by%20%60c%60%20is%0Abuilt%20from%20%60xtime%60%20and%20XOR%2C%20and%20multiplication%20by%20%60a%60%20respects%20both.%20-%2F%0Atheorem%20mul_mulLoop%20%28n%20%3A%20Nat%29%20%28a%20c%20b%20acc%20%3A%20Byte%29%20%3A%0A%20%20%20%20mul%20a%20%28mulLoop%20n%20c%20b%20acc%29%20%3D%20mulLoop%20n%20c%20%28mul%20a%20b%29%20%28mul%20a%20acc%29%20%3A%3D%20by%0A%20%20induction%20n%20generalizing%20c%20b%20acc%20with%0A%20%20%7C%20zero%20%3D%3E%20rfl%0A%20%20%7C%20succ%20n%20ih%20%3D%3E%0A%20%20%20%20rw%20%5BmulLoop%2C%20mulLoop%2C%20ih%2C%20xtime_mul%5D%0A%20%20%20%20congr%201%0A%20%20%20%20split%0A%20%20%20%20%C2%B7%20rfl%0A%20%20%20%20%C2%B7%20exact%20mul_xor%20..%0A%0Atheorem%20mul_left_comm%20%28a%20c%20x%20%3A%20Byte%29%20%3A%20mul%20a%20%28mul%20c%20x%29%20%3D%20mul%20c%20%28mul%20a%20x%29%20%3A%3D%20by%0A%20%20show%20mul%20a%20%28mulLoop%208%20c%20x%200%29%20%3D%20_%0A%20%20rw%20%5Bmul_mulLoop%2C%20mul_zero%5D%3B%20rfl%0A%0A%2F-%21%20%23%23%20The%20field%20laws%20-%2F%0A%0Atheorem%20mul_one%20%28a%20%3A%20Byte%29%20%3A%20mul%20a%201%20%3D%20a%20%3A%3D%20by%0A%20%20have%20%3A%20allBytes%20%28fun%20a%20%3D%3E%20mul%20a%201%20%3D%3D%20a%29%20%3D%20true%20%3A%3D%20by%20decide%20%2Bkernel%0A%20%20simpa%20using%20allBytes_spec%20this%20a%0A%0Atheorem%20mul_comm%20%28a%20b%20%3A%20Byte%29%20%3A%20mul%20a%20b%20%3D%20mul%20b%20a%20%3A%3D%20by%0A%20%20conv%20%3D%3E%20lhs%3B%20rw%20%5B%E2%86%90%20mul_one%20b%5D%0A%20%20rw%20%5Bmul_left_comm%2C%20mul_one%5D%0A%0Atheorem%20one_mul%20%28a%20%3A%20Byte%29%20%3A%20mul%201%20a%20%3D%20a%20%3A%3D%20by%20rw%20%5Bmul_comm%2C%20mul_one%5D%0A%0Atheorem%20zero_mul%20%28a%20%3A%20Byte%29%20%3A%20mul%200%20a%20%3D%200%20%3A%3D%20by%20rw%20%5Bmul_comm%2C%20mul_zero%5D%0A%0Atheorem%20mul_assoc%20%28a%20b%20c%20%3A%20Byte%29%20%3A%20mul%20%28mul%20a%20b%29%20c%20%3D%20mul%20a%20%28mul%20b%20c%29%20%3A%3D%20by%0A%20%20rw%20%5Bmul_comm%2C%20mul_left_comm%2C%20mul_comm%20c%5D%0A%0Atheorem%20xor_mul%20%28a%20b%20c%20%3A%20Byte%29%20%3A%20mul%20%28a%20%5E%5E%5E%20b%29%20c%20%3D%20mul%20a%20c%20%5E%5E%5E%20mul%20b%20c%20%3A%3D%20by%0A%20%20rw%20%5Bmul_comm%2C%20mul_xor%2C%20mul_comm%20c%2C%20mul_comm%20c%5D%0A%0Atheorem%20mul_inv%20%7Bb%20%3A%20Byte%7D%20%28h%20%3A%20b%20%E2%89%A0%200%29%20%3A%20mul%20b%20%28inv%20b%29%20%3D%201%20%3A%3D%20by%0A%20%20have%20%3A%20allBytes%20%28fun%20b%20%3D%3E%20b%20%3D%3D%200%20%7C%7C%20mul%20b%20%28inv%20b%29%20%3D%3D%201%29%20%3D%20true%20%3A%3D%20by%20decide%20%2Bkernel%0A%20%20simpa%20%5Bh%5D%20using%20allBytes_spec%20this%20b%0A%0Atheorem%20inv_mul%20%7Bb%20%3A%20Byte%7D%20%28h%20%3A%20b%20%E2%89%A0%200%29%20%3A%20mul%20%28inv%20b%29%20b%20%3D%201%20%3A%3D%20by%20rw%20%5Bmul_comm%2C%20mul_inv%20h%5D%0A%0A%2F--%20No%20zero%20divisors.%20-%2F%0Atheorem%20mul_eq_zero%20%7Ba%20b%20%3A%20Byte%7D%20%3A%20mul%20a%20b%20%3D%200%20%E2%86%94%20a%20%3D%200%20%E2%88%A8%20b%20%3D%200%20%3A%3D%20by%0A%20%20constructor%0A%20%20%C2%B7%20intro%20h%0A%20%20%20%20by_cases%20ha%20%3A%20a%20%3D%200%0A%20%20%20%20%C2%B7%20exact%20.inl%20ha%0A%20%20%20%20%C2%B7%20right%0A%20%20%20%20%20%20rw%20%5B%E2%86%90%20one_mul%20b%2C%20%E2%86%90%20inv_mul%20ha%2C%20mul_assoc%2C%20h%2C%20mul_zero%5D%0A%20%20%C2%B7%20rintro%20%28rfl%20%7C%20rfl%29%0A%20%20%20%20%C2%B7%20exact%20zero_mul%20b%0A%20%20%20%20%C2%B7%20exact%20mul_zero%20a%0A%0Atheorem%20mul_ne_zero%20%7Ba%20b%20%3A%20Byte%7D%20%28ha%20%3A%20a%20%E2%89%A0%200%29%20%28hb%20%3A%20b%20%E2%89%A0%200%29%20%3A%20mul%20a%20b%20%E2%89%A0%200%20%3A%3D%20by%0A%20%20rw%20%5BNe%2C%20mul_eq_zero%5D%3B%20exact%20fun%20h%20%3D%3E%20h.elim%20ha%20hb%0A%0Atheorem%20inv_ne_zero%20%7Bb%20%3A%20Byte%7D%20%28h%20%3A%20b%20%E2%89%A0%200%29%20%3A%20inv%20b%20%E2%89%A0%200%20%3A%3D%20by%0A%20%20intro%20h%27%0A%20%20have%20%3A%3D%20mul_inv%20h%0A%20%20rw%20%5Bh%27%2C%20mul_zero%5D%20at%20this%0A%20%20exact%20absurd%20this%20%28by%20decide%29%0A%0A%2F--%20Division%3A%20%60b%20%E2%80%A2%20%28b%E2%81%BB%C2%B9%20%E2%80%A2%20c%29%20%3D%20c%60.%20-%2F%0Atheorem%20mul_inv_mul%20%7Bb%20%3A%20Byte%7D%20%28h%20%3A%20b%20%E2%89%A0%200%29%20%28c%20%3A%20Byte%29%20%3A%20mul%20b%20%28mul%20%28inv%20b%29%20c%29%20%3D%20c%20%3A%3D%20by%0A%20%20rw%20%5B%E2%86%90%20mul_assoc%2C%20mul_inv%20h%2C%20one_mul%5D%0A%0Aend%20AES%0A">Run this file in the Lean 4 web editor ↗</a></p></header>
+<nav><strong>Proofs</strong> <a href="#p46">and_xor_distrib</a> <a href="#p53">and_0x80</a> <a href="#p59">xor_xor_cancel</a> <a href="#p62">xtime_xor</a> <a href="#p70">xtime_zero</a> <a href="#p74">mulLoop_xor</a> <a href="#p85">mul_xor</a> <a href="#p89">mul_zero</a> <a href="#p95">xtime_mulLoop</a> <a href="#p103">xtime_mul</a> <a href="#p109">mul_mulLoop</a> <a href="#p120">mul_left_comm</a> <a href="#p126">mul_one</a> <a href="#p130">mul_comm</a> <a href="#p134">one_mul</a> <a href="#p136">zero_mul</a> <a href="#p138">mul_assoc</a> <a href="#p141">xor_mul</a> <a href="#p144">mul_inv</a> <a href="#p148">inv_mul</a> <a href="#p151">mul_eq_zero</a> <a href="#p162">mul_ne_zero</a> <a href="#p165">inv_ne_zero</a> <a href="#p172">mul_inv_mul</a></nav>
+<section class="proof" id="p46">
+<h2>and_xor_distrib <span class="line">line 47</span></h2>
+<pre class="code">theorem and_xor_distrib (x y z : Byte) : (x ^^^ y) &amp;&amp;&amp; z = (x &amp;&amp;&amp; z) ^^^ (y &amp;&amp;&amp; z) := by</pre>
+<p class="words">In words: (x ^^^ y) &amp;&amp;&amp; z equals x &amp;&amp;&amp; z ^^^ y &amp;&amp;&amp; z</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x y z : Byte
+⊢ (x ^^^ y) &amp;&amp;&amp; z = x &amp;&amp;&amp; z ^^^ y &amp;&amp;&amp; z</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>apply UInt8.toBitVec_inj.1</code><span class="change">goal rewritten</span></div><p class="explain">Works backwards: uses a fact of the form &quot;… → goal&quot;; what the fact needs becomes your new goals.</p><div class="state"><pre class="goal">x y z : Byte
+⊢ ((x ^^^ y) &amp;&amp;&amp; z).toBitVec = (x &amp;&amp;&amp; z ^^^ y &amp;&amp;&amp; z).toBitVec</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>ext i hi</code><span class="change">+i  +hi</span></div><p class="explain">Proves two things are equal by showing they agree everywhere (functions, sets, structures). (Mathlib.)</p><div class="state"><pre class="goal">x y z : Byte
+i : Nat
+hi : i &lt; 8
+⊢ ((x ^^^ y) &amp;&amp;&amp; z).toBitVec[i] = (x &amp;&amp;&amp; z ^^^ y &amp;&amp;&amp; z).toBitVec[i]</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [UInt8.toBitVec_and, UInt8.toBitVec_xor, BitVec.getElem_and, BitVec.getElem_xor]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">x y z : Byte
+i : Nat
+hi : i &lt; 8
+⊢ ((x.toBitVec[i] ^^ y.toBitVec[i]) &amp;&amp; z.toBitVec[i]) = (x.toBitVec[i] &amp;&amp; z.toBitVec[i] ^^ y.toBitVec[i] &amp;&amp; z.toBitVec[i])</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>cases x.toBitVec[i] &lt;;&gt; cases y.toBitVec[i] &lt;;&gt; simp</code><span class="change">goals accomplished</span></div><p class="explain">Splits on how something was made: a proof of p ∨ q gives two cases, a number is 0 or k + 1, and so on.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p53">
+<h2>and_0x80 <span class="line">line 54</span></h2>
+<pre class="code">theorem and_0x80 (x : Byte) : x &amp;&amp;&amp; 0x80 = 0 ∨ x &amp;&amp;&amp; 0x80 = 0x80 := by</pre>
+<p class="words">In words: x &amp;&amp;&amp; 128 equals 0 or x &amp;&amp;&amp; 128 equals 128</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x : Byte
+⊢ x &amp;&amp;&amp; 128 = 0 ∨ x &amp;&amp;&amp; 128 = 128</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>have : allBytes (fun x =&gt; x &amp;&amp;&amp; 0x80 == 0 || x &amp;&amp;&amp; 0x80 == 0x80) = true := by decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simpa using allBytes_spec this x</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p59">
+<h2>xor_xor_cancel <span class="line">line 60</span></h2>
+<pre class="code">theorem xor_xor_cancel (a b k : Byte) : (a ^^^ k) ^^^ (b ^^^ k) = a ^^^ b := by</pre>
+<p class="words">In words: a ^^^ k ^^^ (b ^^^ k) equals a ^^^ b</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b k : Byte
+⊢ a ^^^ k ^^^ (b ^^^ k) = a ^^^ b</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [show (a ^^^ k) ^^^ (b ^^^ k) = (a ^^^ b) ^^^ (k ^^^ k) by ac_rfl, UInt8.xor_self, UInt8.xor_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p62">
+<h2>xtime_xor <span class="line">line 63</span></h2>
+<pre class="code">theorem xtime_xor (x y : Byte) : xtime (x ^^^ y) = xtime x ^^^ xtime y := by</pre>
+<p class="words">In words: xtime (x ^^^ y) equals xtime x ^^^ xtime y</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x y : Byte
+⊢ xtime (x ^^^ y) = xtime x ^^^ xtime y</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>unfold xtime</code><span class="change">goal rewritten</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><pre class="goal">x y : Byte
+⊢ (if (x ^^^ y) &amp;&amp;&amp; 128 = 0 then (x ^^^ y) &lt;&lt;&lt; 1 else (x ^^^ y) &lt;&lt;&lt; 1 ^^^ 27) =
+  (if x &amp;&amp;&amp; 128 = 0 then x &lt;&lt;&lt; 1 else x &lt;&lt;&lt; 1 ^^^ 27) ^^^ if y &amp;&amp;&amp; 128 = 0 then y &lt;&lt;&lt; 1 else y &lt;&lt;&lt; 1 ^^^ 27</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [and_xor_distrib, UInt8.shiftLeft_xor]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">x y : Byte
+⊢ (if x &amp;&amp;&amp; 128 ^^^ y &amp;&amp;&amp; 128 = 0 then x &lt;&lt;&lt; 1 ^^^ y &lt;&lt;&lt; 1 else x &lt;&lt;&lt; 1 ^^^ y &lt;&lt;&lt; 1 ^^^ 27) =
+  (if x &amp;&amp;&amp; 128 = 0 then x &lt;&lt;&lt; 1 else x &lt;&lt;&lt; 1 ^^^ 27) ^^^ if y &amp;&amp;&amp; 128 = 0 then y &lt;&lt;&lt; 1 else y &lt;&lt;&lt; 1 ^^^ 27</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>have h80 : (0x80 : Byte) ≠ 0 := by decide</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rcases and_0x80 x with hx | hx &lt;;&gt; rcases and_0x80 y with hy | hy &lt;;&gt;</code><span class="change">+3 goals  +hx  +hy</span></div><p class="explain">Takes apart a hypothesis in one go with a pattern: rcases h with ⟨x, hx⟩ | h&#39;.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [hx, hy, UInt8.xor_self, UInt8.xor_zero, UInt8.zero_xor, h80, ↓reduceIte] &lt;;&gt;</code><span class="change">closed 1 goal  ~hy</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">case inl.inr
+x y : Byte
+h80 : 128 ≠ 0
+hx : x &amp;&amp;&amp; 128 = 0
+hy : y &amp;&amp;&amp; 128 = 128
+⊢ x &lt;&lt;&lt; 1 ^^^ y &lt;&lt;&lt; 1 ^^^ 27 = x &lt;&lt;&lt; 1 ^^^ (y &lt;&lt;&lt; 1 ^^^ 27)</pre><pre class="goal">case inr.inl
+x y : Byte
+h80 : 128 ≠ 0
+hx : x &amp;&amp;&amp; 128 = 128
+hy : y &amp;&amp;&amp; 128 = 0
+⊢ x &lt;&lt;&lt; 1 ^^^ y &lt;&lt;&lt; 1 ^^^ 27 = x &lt;&lt;&lt; 1 ^^^ 27 ^^^ y &lt;&lt;&lt; 1</pre><pre class="goal">case inr.inr
+x y : Byte
+h80 : 128 ≠ 0
+hx : x &amp;&amp;&amp; 128 = 128
+hy : y &amp;&amp;&amp; 128 = 128
+⊢ x &lt;&lt;&lt; 1 ^^^ y &lt;&lt;&lt; 1 = x &lt;&lt;&lt; 1 ^^^ 27 ^^^ (y &lt;&lt;&lt; 1 ^^^ 27)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>first | rfl | rw [xor_xor_cancel] | ac_rfl</code><span class="change">goals accomplished</span></div><p class="explain">Tries tactics in order and uses the first that works.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p70">
+<h2>xtime_zero <span class="line">line 71</span></h2>
+<pre class="code">theorem xtime_zero : xtime 0 = 0 := by decide</pre>
+<p class="words">In words: xtime 0 equals 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">⊢ xtime 0 = 0</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>decide</code><span class="change">goals accomplished</span></div><p class="explain">Proves a statement by computing its answer, for statements about specific values (2 + 2 = 4, 7 is prime…).</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p74">
+<h2>mulLoop_xor <span class="line">line 75</span></h2>
+<pre class="code">theorem mulLoop_xor (n : Nat) (a b b&#39; acc acc&#39; : Byte) :
+    mulLoop n a (b ^^^ b&#39;) (acc ^^^ acc&#39;) = mulLoop n a b acc ^^^ mulLoop n a b&#39; acc&#39; := by</pre>
+<p class="words">In words: mulLoop n a (b ^^^ b&#39;) (acc ^^^ acc&#39;) equals mulLoop n a b acc ^^^ mulLoop n a b&#39; acc&#39;</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">n : Nat
+a b b&#39; acc acc&#39; : Byte
+⊢ mulLoop n a (b ^^^ b&#39;) (acc ^^^ acc&#39;) = mulLoop n a b acc ^^^ mulLoop n a b&#39; acc&#39;</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>induction n generalizing a b b&#39; acc acc&#39; with</code><span class="change">continues below</span></div><p class="explain">Proves a statement for every number (or list, or tree): prove it for the base case, then for the next one assuming the previous (the induction hypothesis).</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| zero =&gt; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| succ n ih =&gt;</code><span class="change">continues below</span></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [mulLoop, xtime_xor]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">case succ
+n : Nat
+ih : ∀ (a b b&#39; acc acc&#39; : Byte), mulLoop n a (b ^^^ b&#39;) (acc ^^^ acc&#39;) = mulLoop n a b acc ^^^ mulLoop n a b&#39; acc&#39;
+a b b&#39; acc acc&#39; : Byte
+⊢ mulLoop n (a &gt;&gt;&gt; 1) (xtime b ^^^ xtime b&#39;) (if a &amp;&amp;&amp; 1 = 0 then acc ^^^ acc&#39; else acc ^^^ acc&#39; ^^^ (b ^^^ b&#39;)) =
+  mulLoop n (a &gt;&gt;&gt; 1) (xtime b) (if a &amp;&amp;&amp; 1 = 0 then acc else acc ^^^ b) ^^^
+    mulLoop n (a &gt;&gt;&gt; 1) (xtime b&#39;) (if a &amp;&amp;&amp; 1 = 0 then acc&#39; else acc&#39; ^^^ b&#39;)</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>split</code><span class="change">+1 goal  +h✝</span></div><p class="explain">Splits a goal that contains if-then-else or match into its cases.</p><div class="state"><pre class="goal">case succ.isTrue
+n : Nat
+ih : ∀ (a b b&#39; acc acc&#39; : Byte), mulLoop n a (b ^^^ b&#39;) (acc ^^^ acc&#39;) = mulLoop n a b acc ^^^ mulLoop n a b&#39; acc&#39;
+a b b&#39; acc acc&#39; : Byte
+h✝ : a &amp;&amp;&amp; 1 = 0
+⊢ mulLoop n (a &gt;&gt;&gt; 1) (xtime b ^^^ xtime b&#39;) (acc ^^^ acc&#39;) =
+  mulLoop n (a &gt;&gt;&gt; 1) (xtime b) acc ^^^ mulLoop n (a &gt;&gt;&gt; 1) (xtime b&#39;) acc&#39;</pre><pre class="goal">case succ.isFalse
+n : Nat
+ih : ∀ (a b b&#39; acc acc&#39; : Byte), mulLoop n a (b ^^^ b&#39;) (acc ^^^ acc&#39;) = mulLoop n a b acc ^^^ mulLoop n a b&#39; acc&#39;
+a b b&#39; acc acc&#39; : Byte
+h✝ : &#172;a &amp;&amp;&amp; 1 = 0
+⊢ mulLoop n (a &gt;&gt;&gt; 1) (xtime b ^^^ xtime b&#39;) (acc ^^^ acc&#39; ^^^ (b ^^^ b&#39;)) =
+  mulLoop n (a &gt;&gt;&gt; 1) (xtime b) (acc ^^^ b) ^^^ mulLoop n (a &gt;&gt;&gt; 1) (xtime b&#39;) (acc&#39; ^^^ b&#39;)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact ih ..</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; rw [show acc ^^^ acc&#39; ^^^ (b ^^^ b&#39;) = (acc ^^^ b) ^^^ (acc&#39; ^^^ b&#39;) by ac_rfl]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>exact ih ..</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p85">
+<h2>mul_xor <span class="line">line 86</span></h2>
+<pre class="code">theorem mul_xor (a b c : Byte) : mul a (b ^^^ c) = mul a b ^^^ mul a c := by</pre>
+<p class="words">In words: mul a (b ^^^ c) equals mul a b ^^^ mul a c</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b c : Byte
+⊢ mul a (b ^^^ c) = mul a b ^^^ mul a c</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>unfold mul</code><span class="change">goal rewritten</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><pre class="goal">a b c : Byte
+⊢ mulLoop 8 a (b ^^^ c) 0 = mulLoop 8 a b 0 ^^^ mulLoop 8 a c 0</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [← mulLoop_xor, UInt8.xor_self]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p89">
+<h2>mul_zero <span class="line">line 90</span></h2>
+<pre class="code">theorem mul_zero (a : Byte) : mul a 0 = 0 := by</pre>
+<p class="words">In words: mul a 0 equals 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Byte
+⊢ mul a 0 = 0</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>have h := mul_xor a 0 0</code><span class="change">+h</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a : Byte
+h : mul a (0 ^^^ 0) = mul a 0 ^^^ mul a 0
+⊢ mul a 0 = 0</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [UInt8.xor_self, UInt8.xor_self] at h</code><span class="change">~h</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">a : Byte
+h : mul a 0 = 0
+⊢ mul a 0 = 0</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>exact h</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p95">
+<h2>xtime_mulLoop <span class="line">line 96</span></h2>
+<pre class="code">theorem xtime_mulLoop (n : Nat) (a b acc : Byte) :
+    xtime (mulLoop n a b acc) = mulLoop n a (xtime b) (xtime acc) := by</pre>
+<p class="words">In words: xtime (mulLoop n a b acc) equals mulLoop n a (xtime b) (xtime acc)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">n : Nat
+a b acc : Byte
+⊢ xtime (mulLoop n a b acc) = mulLoop n a (xtime b) (xtime acc)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>induction n generalizing a b acc with</code><span class="change">continues below</span></div><p class="explain">Proves a statement for every number (or list, or tree): prove it for the base case, then for the next one assuming the previous (the induction hypothesis).</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| zero =&gt; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| succ n ih =&gt;</code><span class="change">continues below</span></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [mulLoop, ih]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">case succ
+n : Nat
+ih : ∀ (a b acc : Byte), xtime (mulLoop n a b acc) = mulLoop n a (xtime b) (xtime acc)
+a b acc : Byte
+⊢ mulLoop n (a &gt;&gt;&gt; 1) (xtime (xtime b)) (xtime (if a &amp;&amp;&amp; 1 = 0 then acc else acc ^^^ b)) =
+  mulLoop n (a &gt;&gt;&gt; 1) (xtime (xtime b)) (if a &amp;&amp;&amp; 1 = 0 then xtime acc else xtime acc ^^^ xtime b)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>split &lt;;&gt; simp [xtime_xor]</code><span class="change">goals accomplished</span></div><p class="explain">Splits a goal that contains if-then-else or match into its cases.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p103">
+<h2>xtime_mul <span class="line">line 104</span></h2>
+<pre class="code">theorem xtime_mul (a b : Byte) : xtime (mul a b) = mul a (xtime b) := by</pre>
+<p class="words">In words: xtime (mul a b) equals mul a (xtime b)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Byte
+⊢ xtime (mul a b) = mul a (xtime b)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>show xtime (mulLoop 8 a b 0) = mulLoop 8 a (xtime b) 0</code><span class="change">goal rewritten</span></div><p class="explain">Restates the goal in a form you choose (it must mean the same thing); also helps readers.</p><div class="state"><pre class="goal">a b : Byte
+⊢ xtime (mulLoop 8 a b 0) = mulLoop 8 a (xtime b) 0</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [xtime_mulLoop, xtime_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p109">
+<h2>mul_mulLoop <span class="line">line 110</span></h2>
+<pre class="code">theorem mul_mulLoop (n : Nat) (a c b acc : Byte) :
+    mul a (mulLoop n c b acc) = mulLoop n c (mul a b) (mul a acc) := by</pre>
+<p class="words">In words: mul a (mulLoop n c b acc) equals mulLoop n c (mul a b) (mul a acc)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">n : Nat
+a c b acc : Byte
+⊢ mul a (mulLoop n c b acc) = mulLoop n c (mul a b) (mul a acc)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>induction n generalizing c b acc with</code><span class="change">continues below</span></div><p class="explain">Proves a statement for every number (or list, or tree): prove it for the base case, then for the next one assuming the previous (the induction hypothesis).</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| zero =&gt; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| succ n ih =&gt;</code><span class="change">continues below</span></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [mulLoop, mulLoop, ih, xtime_mul]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">case succ
+a : Byte
+n : Nat
+ih : ∀ (c b acc : Byte), mul a (mulLoop n c b acc) = mulLoop n c (mul a b) (mul a acc)
+c b acc : Byte
+⊢ mulLoop n (c &gt;&gt;&gt; 1) (mul a (xtime b)) (mul a (if c &amp;&amp;&amp; 1 = 0 then acc else acc ^^^ b)) =
+  mulLoop n (c &gt;&gt;&gt; 1) (mul a (xtime b)) (if c &amp;&amp;&amp; 1 = 0 then mul a acc else mul a acc ^^^ mul a b)</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>congr 1</code><span class="change">goal rewritten</span></div><p class="explain">Proves f a = f b by proving a = b.</p><div class="state"><pre class="goal">case succ.e_a
+a : Byte
+n : Nat
+ih : ∀ (c b acc : Byte), mul a (mulLoop n c b acc) = mulLoop n c (mul a b) (mul a acc)
+c b acc : Byte
+⊢ mul a (if c &amp;&amp;&amp; 1 = 0 then acc else acc ^^^ b) = if c &amp;&amp;&amp; 1 = 0 then mul a acc else mul a acc ^^^ mul a b</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>split</code><span class="change">+1 goal  +h✝</span></div><p class="explain">Splits a goal that contains if-then-else or match into its cases.</p><div class="state"><pre class="goal">case succ.e_a.isTrue
+a : Byte
+n : Nat
+ih : ∀ (c b acc : Byte), mul a (mulLoop n c b acc) = mulLoop n c (mul a b) (mul a acc)
+c b acc : Byte
+h✝ : c &amp;&amp;&amp; 1 = 0
+⊢ mul a acc = mul a acc</pre><pre class="goal">case succ.e_a.isFalse
+a : Byte
+n : Nat
+ih : ∀ (c b acc : Byte), mul a (mulLoop n c b acc) = mulLoop n c (mul a b) (mul a acc)
+c b acc : Byte
+h✝ : &#172;c &amp;&amp;&amp; 1 = 0
+⊢ mul a (acc ^^^ b) = mul a acc ^^^ mul a b</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact mul_xor ..</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p120">
+<h2>mul_left_comm <span class="line">line 121</span></h2>
+<pre class="code">theorem mul_left_comm (a c x : Byte) : mul a (mul c x) = mul c (mul a x) := by</pre>
+<p class="words">In words: mul a (mul c x) equals mul c (mul a x)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a c x : Byte
+⊢ mul a (mul c x) = mul c (mul a x)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>show mul a (mulLoop 8 c x 0) = _</code><span class="change">goal rewritten</span></div><p class="explain">Restates the goal in a form you choose (it must mean the same thing); also helps readers.</p><div class="state"><pre class="goal">a c x : Byte
+⊢ mul a (mulLoop 8 c x 0) = mul c (mul a x)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mul_mulLoop, mul_zero]; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p126">
+<h2>mul_one <span class="line">line 127</span></h2>
+<pre class="code">theorem mul_one (a : Byte) : mul a 1 = a := by</pre>
+<p class="words">In words: mul a 1 equals a</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Byte
+⊢ mul a 1 = a</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>have : allBytes (fun a =&gt; mul a 1 == a) = true := by decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simpa using allBytes_spec this a</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p130">
+<h2>mul_comm <span class="line">line 131</span></h2>
+<pre class="code">theorem mul_comm (a b : Byte) : mul a b = mul b a := by</pre>
+<p class="words">In words: mul a b equals mul b a</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Byte
+| mul a b = mul b a</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>conv =&gt; lhs; rw [← mul_one b]</code><span class="change">goal rewritten</span></div><div class="state"><pre class="goal">a b : Byte
+| mul a (mul b 1)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mul_left_comm, mul_one]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p134">
+<h2>one_mul <span class="line">line 135</span></h2>
+<pre class="code">theorem one_mul (a : Byte) : mul 1 a = a := by rw [mul_comm, mul_one]</pre>
+<p class="words">In words: mul 1 a equals a</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Byte
+⊢ mul 1 a = a</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mul_comm, mul_one]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p136">
+<h2>zero_mul <span class="line">line 137</span></h2>
+<pre class="code">theorem zero_mul (a : Byte) : mul 0 a = 0 := by rw [mul_comm, mul_zero]</pre>
+<p class="words">In words: mul 0 a equals 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Byte
+⊢ mul 0 a = 0</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mul_comm, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p138">
+<h2>mul_assoc <span class="line">line 139</span></h2>
+<pre class="code">theorem mul_assoc (a b c : Byte) : mul (mul a b) c = mul a (mul b c) := by</pre>
+<p class="words">In words: mul (mul a b) c equals mul a (mul b c)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b c : Byte
+⊢ mul (mul a b) c = mul a (mul b c)</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mul_comm, mul_left_comm, mul_comm c]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p141">
+<h2>xor_mul <span class="line">line 142</span></h2>
+<pre class="code">theorem xor_mul (a b c : Byte) : mul (a ^^^ b) c = mul a c ^^^ mul b c := by</pre>
+<p class="words">In words: mul (a ^^^ b) c equals mul a c ^^^ mul b c</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b c : Byte
+⊢ mul (a ^^^ b) c = mul a c ^^^ mul b c</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mul_comm, mul_xor, mul_comm c, mul_comm c]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p144">
+<h2>mul_inv <span class="line">line 145</span></h2>
+<pre class="code">theorem mul_inv {b : Byte} (h : b ≠ 0) : mul b (inv b) = 1 := by</pre>
+<p class="words">In words: mul b (inv b) equals 1</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">b : Byte
+h : b ≠ 0
+⊢ mul b (inv b) = 1</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>have : allBytes (fun b =&gt; b == 0 || mul b (inv b) == 1) = true := by decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simpa [h] using allBytes_spec this b</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p148">
+<h2>inv_mul <span class="line">line 149</span></h2>
+<pre class="code">theorem inv_mul {b : Byte} (h : b ≠ 0) : mul (inv b) b = 1 := by rw [mul_comm, mul_inv h]</pre>
+<p class="words">In words: mul (inv b) b equals 1</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">b : Byte
+h : b ≠ 0
+⊢ mul (inv b) b = 1</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mul_comm, mul_inv h]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p151">
+<h2>mul_eq_zero <span class="line">line 152</span></h2>
+<pre class="code">theorem mul_eq_zero {a b : Byte} : mul a b = 0 ↔ a = 0 ∨ b = 0 := by</pre>
+<p class="words">In words: mul a b equals 0 exactly when a equals 0 or b equals 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Byte
+⊢ mul a b = 0 ↔ a = 0 ∨ b = 0</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>constructor</code><span class="change">+1 goal</span></div><p class="explain">Splits a goal built from parts: &quot;p ∧ q&quot; becomes two goals, p and q; &quot;p ↔ q&quot; becomes both directions.</p><div class="state"><pre class="goal">case mp
+a b : Byte
+⊢ mul a b = 0 → a = 0 ∨ b = 0</pre><pre class="goal">case mpr
+a b : Byte
+⊢ a = 0 ∨ b = 0 → mul a b = 0</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; intro h</code><span class="change">closed 1 goal  +h</span></div><p class="explain">Proves &quot;if … then …&quot; or &quot;for all …&quot; by assuming the premise: moves it from the goal into your hypotheses, under the name you give.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>by_cases ha : a = 0</code><span class="change">+1 goal  +ha</span></div><p class="explain">Splits into two cases: the statement holds, or it does not.</p><div class="state"><pre class="goal">case pos
+a b : Byte
+h : mul a b = 0
+ha : a = 0
+⊢ a = 0 ∨ b = 0</pre><pre class="goal">case neg
+a b : Byte
+h : mul a b = 0
+ha : &#172;a = 0
+⊢ a = 0 ∨ b = 0</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact .inl ha</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; right</code><span class="change">goal rewritten</span></div><p class="explain">To prove &quot;p ∨ q&quot;, commit to proving q.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [← one_mul b, ← inv_mul ha, mul_assoc, h, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; rintro (rfl | rfl)</code><span class="change">+1 goal  −a</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact zero_mul b</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact mul_zero a</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p162">
+<h2>mul_ne_zero <span class="line">line 163</span></h2>
+<pre class="code">theorem mul_ne_zero {a b : Byte} (ha : a ≠ 0) (hb : b ≠ 0) : mul a b ≠ 0 := by</pre>
+<p class="words">In words: mul a b is not equal to 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Byte
+ha : a ≠ 0
+hb : b ≠ 0
+⊢ mul a b ≠ 0</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [Ne, mul_eq_zero]; exact fun h =&gt; h.elim ha hb</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p165">
+<h2>inv_ne_zero <span class="line">line 166</span></h2>
+<pre class="code">theorem inv_ne_zero {b : Byte} (h : b ≠ 0) : inv b ≠ 0 := by</pre>
+<p class="words">In words: inv b is not equal to 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">b : Byte
+h : b ≠ 0
+⊢ inv b ≠ 0</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>intro h&#39;</code><span class="change">+h&#39;</span></div><p class="explain">Proves &quot;if … then …&quot; or &quot;for all …&quot; by assuming the premise: moves it from the goal into your hypotheses, under the name you give.</p><div class="state"><pre class="goal">b : Byte
+h : b ≠ 0
+h&#39; : inv b = 0
+⊢ False</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := mul_inv h</code><span class="change">+this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">b : Byte
+h : b ≠ 0
+h&#39; : inv b = 0
+this : mul b (inv b) = 1
+⊢ False</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [h&#39;, mul_zero] at this</code><span class="change">~this</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">b : Byte
+h : b ≠ 0
+h&#39; : inv b = 0
+this : 0 = 1
+⊢ False</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>exact absurd this (by decide)</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p172">
+<h2>mul_inv_mul <span class="line">line 173</span></h2>
+<pre class="code">theorem mul_inv_mul {b : Byte} (h : b ≠ 0) (c : Byte) : mul b (mul (inv b) c) = c := by</pre>
+<p class="words">In words: mul b (mul (inv b) c) equals c</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">b : Byte
+h : b ≠ 0
+c : Byte
+⊢ mul b (mul (inv b) c) = c</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [← mul_assoc, mul_inv h, one_mul]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<details class="source"><summary>The whole file</summary><pre class="code">import AES.Basic
+
+/-!
+# Arithmetic in GF(2⁸)
+
+FIPS-197 &#167;4. Addition is XOR. Multiplication is defined the way &#167;4.2 defines it: `xtime` multiplies by
+`x` and reduces by `m(x) = x⁸ + x⁴ + x&#179; + x + 1`, and a general product is the sum of `xtimeⁱ b` over
+the bits `i` of `a`.
+
+The field laws are proved rather than enumerated. Everything follows from one fact, that `xtime` is
+additive, which is a bit-level argument about a shift and a conditional XOR. From it, multiplication by
+any `a` is additive and commutes with `xtime`; that makes any two multiplications commute, and
+commutativity and associativity fall out by putting `1` in the right place. The only facts checked by
+running over all 256 bytes are the one-variable ones: `a • 1 = a` and `b • b⁻&#185; = 1`.
+-/
+
+namespace AES
+
+set_option maxHeartbeats 0
+
+/-- `xTimes`, FIPS-197 &#167;4.2: multiply by the polynomial `x`, reducing by `m(x)` when bit 7 falls off. -/
+def xtime (b : Byte) : Byte := if b &amp;&amp;&amp; 0x80 = 0 then b &lt;&lt;&lt; 1 else (b &lt;&lt;&lt; 1) ^^^ 0x1b
+
+/-- The loop behind `mul`: `n` more bits of `a` to read, `b` the current `xtimeⁱ` of the multiplicand,
+`acc` the sum so far. Structural on `n`, so the kernel runs it. -/
+def mulLoop : Nat → Byte → Byte → Byte → Byte
+  | 0, _, _, acc =&gt; acc
+  | n + 1, a, b, acc =&gt; mulLoop n (a &gt;&gt;&gt; 1) (xtime b) (if a &amp;&amp;&amp; 1 = 0 then acc else acc ^^^ b)
+
+/-- Multiplication in GF(2⁸), written `a • b` in FIPS-197 &#167;4.2. -/
+def mul (a b : Byte) : Byte := mulLoop 8 a b 0
+
+/-- The multiplicative inverse, FIPS-197 &#167;4.4: `b⁻&#185; = b&#178;⁵⁴`, and `0⁻&#185; = 0`. Computed by an addition
+chain, `254 = 2 + 4 + 8 + 16 + 32 + 64 + 128`. -/
+def inv (b : Byte) : Byte :=
+  let b2 := mul b b
+  let b4 := mul b2 b2
+  let b8 := mul b4 b4
+  let b16 := mul b8 b8
+  let b32 := mul b16 b16
+  let b64 := mul b32 b32
+  let b128 := mul b64 b64
+  mul b2 (mul b4 (mul b8 (mul b16 (mul b32 (mul b64 b128)))))
+
+/-! ## XOR on bytes -/
+
+theorem and_xor_distrib (x y z : Byte) : (x ^^^ y) &amp;&amp;&amp; z = (x &amp;&amp;&amp; z) ^^^ (y &amp;&amp;&amp; z) := by
+  apply UInt8.toBitVec_inj.1
+  ext i hi
+  simp only [UInt8.toBitVec_and, UInt8.toBitVec_xor, BitVec.getElem_and, BitVec.getElem_xor]
+  cases x.toBitVec[i] &lt;;&gt; cases y.toBitVec[i] &lt;;&gt; simp
+
+/-- Bit 7 of a byte is either clear or set. -/
+theorem and_0x80 (x : Byte) : x &amp;&amp;&amp; 0x80 = 0 ∨ x &amp;&amp;&amp; 0x80 = 0x80 := by
+  have : allBytes (fun x =&gt; x &amp;&amp;&amp; 0x80 == 0 || x &amp;&amp;&amp; 0x80 == 0x80) = true := by decide +kernel
+  simpa using allBytes_spec this x
+
+/-! ## `xtime` is additive -/
+
+theorem xor_xor_cancel (a b k : Byte) : (a ^^^ k) ^^^ (b ^^^ k) = a ^^^ b := by
+  rw [show (a ^^^ k) ^^^ (b ^^^ k) = (a ^^^ b) ^^^ (k ^^^ k) by ac_rfl, UInt8.xor_self, UInt8.xor_zero]
+
+theorem xtime_xor (x y : Byte) : xtime (x ^^^ y) = xtime x ^^^ xtime y := by
+  unfold xtime
+  rw [and_xor_distrib, UInt8.shiftLeft_xor]
+  have h80 : (0x80 : Byte) ≠ 0 := by decide
+  rcases and_0x80 x with hx | hx &lt;;&gt; rcases and_0x80 y with hy | hy &lt;;&gt;
+    simp only [hx, hy, UInt8.xor_self, UInt8.xor_zero, UInt8.zero_xor, h80, ↓reduceIte] &lt;;&gt;
+    first | rfl | rw [xor_xor_cancel] | ac_rfl
+
+theorem xtime_zero : xtime 0 = 0 := by decide
+
+/-! ## Multiplication by a fixed `a` is additive and commutes with `xtime` -/
+
+theorem mulLoop_xor (n : Nat) (a b b&#39; acc acc&#39; : Byte) :
+    mulLoop n a (b ^^^ b&#39;) (acc ^^^ acc&#39;) = mulLoop n a b acc ^^^ mulLoop n a b&#39; acc&#39; := by
+  induction n generalizing a b b&#39; acc acc&#39; with
+  | zero =&gt; rfl
+  | succ n ih =&gt;
+    simp only [mulLoop, xtime_xor]
+    split
+    &#183; exact ih ..
+    &#183; rw [show acc ^^^ acc&#39; ^^^ (b ^^^ b&#39;) = (acc ^^^ b) ^^^ (acc&#39; ^^^ b&#39;) by ac_rfl]
+      exact ih ..
+
+theorem mul_xor (a b c : Byte) : mul a (b ^^^ c) = mul a b ^^^ mul a c := by
+  unfold mul
+  rw [← mulLoop_xor, UInt8.xor_self]
+
+theorem mul_zero (a : Byte) : mul a 0 = 0 := by
+  -- `m = m ^^^ m` forces `m = 0`
+  have h := mul_xor a 0 0
+  rw [UInt8.xor_self, UInt8.xor_self] at h
+  exact h
+
+theorem xtime_mulLoop (n : Nat) (a b acc : Byte) :
+    xtime (mulLoop n a b acc) = mulLoop n a (xtime b) (xtime acc) := by
+  induction n generalizing a b acc with
+  | zero =&gt; rfl
+  | succ n ih =&gt;
+    simp only [mulLoop, ih]
+    split &lt;;&gt; simp [xtime_xor]
+
+theorem xtime_mul (a b : Byte) : xtime (mul a b) = mul a (xtime b) := by
+  show xtime (mulLoop 8 a b 0) = mulLoop 8 a (xtime b) 0
+  rw [xtime_mulLoop, xtime_zero]
+
+/-- Any multiplication commutes with any other: `a • (c • x) = c • (a • x)`. Multiplication by `c` is
+built from `xtime` and XOR, and multiplication by `a` respects both. -/
+theorem mul_mulLoop (n : Nat) (a c b acc : Byte) :
+    mul a (mulLoop n c b acc) = mulLoop n c (mul a b) (mul a acc) := by
+  induction n generalizing c b acc with
+  | zero =&gt; rfl
+  | succ n ih =&gt;
+    rw [mulLoop, mulLoop, ih, xtime_mul]
+    congr 1
+    split
+    &#183; rfl
+    &#183; exact mul_xor ..
+
+theorem mul_left_comm (a c x : Byte) : mul a (mul c x) = mul c (mul a x) := by
+  show mul a (mulLoop 8 c x 0) = _
+  rw [mul_mulLoop, mul_zero]; rfl
+
+/-! ## The field laws -/
+
+theorem mul_one (a : Byte) : mul a 1 = a := by
+  have : allBytes (fun a =&gt; mul a 1 == a) = true := by decide +kernel
+  simpa using allBytes_spec this a
+
+theorem mul_comm (a b : Byte) : mul a b = mul b a := by
+  conv =&gt; lhs; rw [← mul_one b]
+  rw [mul_left_comm, mul_one]
+
+theorem one_mul (a : Byte) : mul 1 a = a := by rw [mul_comm, mul_one]
+
+theorem zero_mul (a : Byte) : mul 0 a = 0 := by rw [mul_comm, mul_zero]
+
+theorem mul_assoc (a b c : Byte) : mul (mul a b) c = mul a (mul b c) := by
+  rw [mul_comm, mul_left_comm, mul_comm c]
+
+theorem xor_mul (a b c : Byte) : mul (a ^^^ b) c = mul a c ^^^ mul b c := by
+  rw [mul_comm, mul_xor, mul_comm c, mul_comm c]
+
+theorem mul_inv {b : Byte} (h : b ≠ 0) : mul b (inv b) = 1 := by
+  have : allBytes (fun b =&gt; b == 0 || mul b (inv b) == 1) = true := by decide +kernel
+  simpa [h] using allBytes_spec this b
+
+theorem inv_mul {b : Byte} (h : b ≠ 0) : mul (inv b) b = 1 := by rw [mul_comm, mul_inv h]
+
+/-- No zero divisors. -/
+theorem mul_eq_zero {a b : Byte} : mul a b = 0 ↔ a = 0 ∨ b = 0 := by
+  constructor
+  &#183; intro h
+    by_cases ha : a = 0
+    &#183; exact .inl ha
+    &#183; right
+      rw [← one_mul b, ← inv_mul ha, mul_assoc, h, mul_zero]
+  &#183; rintro (rfl | rfl)
+    &#183; exact zero_mul b
+    &#183; exact mul_zero a
+
+theorem mul_ne_zero {a b : Byte} (ha : a ≠ 0) (hb : b ≠ 0) : mul a b ≠ 0 := by
+  rw [Ne, mul_eq_zero]; exact fun h =&gt; h.elim ha hb
+
+theorem inv_ne_zero {b : Byte} (h : b ≠ 0) : inv b ≠ 0 := by
+  intro h&#39;
+  have := mul_inv h
+  rw [h&#39;, mul_zero] at this
+  exact absurd this (by decide)
+
+/-- Division: `b • (b⁻&#185; • c) = c`. -/
+theorem mul_inv_mul {b : Byte} (h : b ≠ 0) (c : Byte) : mul b (mul (inv b) c) = c := by
+  rw [← mul_assoc, mul_inv h, one_mul]
+
+end AES
+</pre></details>
+<footer>Made with <a href="https://github.com/keithadler/leanstudio">Lean Studio</a>, by Keith Adler (<a href="https://x.com/keithadler">@keithadler</a>). Goals are exactly as Lean reported them.</footer>
+</main>
+<script>
+const steps = [...document.querySelectorAll('.step')];
+let at = -1;
+function go(i) {
+  if (i < 0 || i >= steps.length) return;
+  steps.forEach(s => s.classList.remove('current'));
+  at = i; steps[i].classList.add('current'); steps[i].focus({ preventScroll: true });
+  steps[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+steps.forEach((s, i) => s.addEventListener('click', () => go(i)));
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'j') { go(at + 1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft' || e.key === 'k') { go(at - 1); e.preventDefault(); }
+});</script>
+</body></html>

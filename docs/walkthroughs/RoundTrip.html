@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoundTrip.lean · proof walkthrough</title>
+<style>
+:root { --bg:#fbfaf8; --fg:#1d1d1f; --dim:#6b6b70; --card:#ffffff; --line:#e4e2dd; --accent:#3f6fd8; --ok:#1f8a3b; --code:#f3f1ec; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16171a; --fg:#e6e6e9; --dim:#9a9aa3; --card:#1e2024; --line:#2e3036; --accent:#7aa2f7; --ok:#4cc36b; --code:#23252b; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; } h2 { font-size: 20px; margin: 0 0 12px; }
+.sub, .line, .words, footer, .explain { color: var(--dim); }
+.line { font-size: 13px; font-weight: normal; margin-left: 6px; }
+a { color: var(--accent); }
+.button { display:inline-block; padding:6px 14px; border:1px solid var(--accent); border-radius:6px; text-decoration:none; }
+nav { margin: 20px 0; display:flex; flex-wrap:wrap; gap:6px 12px; font-size:14px; }
+pre, code { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+pre.code { background: var(--code); padding: 12px 14px; border-radius: 8px; }
+.proof { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; }
+.state { margin-top: 8px; }
+.state.start { margin: 12px 0 4px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-bottom: 4px; }
+.goal { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 4px 0; background: var(--code); border-radius: 0 6px 6px 0; }
+.none { color: var(--ok); font-weight: 600; }
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 16px 0 0; }
+.step { counter-increment: s; position: relative; padding: 12px 12px 12px 44px; border-top: 1px solid var(--line); outline: none; }
+.step::before { content: counter(s); position: absolute; left: 8px; top: 12px; width: 24px; height: 24px; border-radius: 50%;
+                background: var(--code); color: var(--dim); font-size: 13px; text-align: center; line-height: 24px; }
+.step.done::before { background: var(--ok); color: #fff; content: "✓"; }
+.step.current { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
+.tactic { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.tactic code { font-weight: 600; }
+.change { font-size: 13px; color: var(--dim); }
+.explain { margin: 4px 0 0; font-size: 14px; }
+details.source { margin-top: 24px; } footer { margin-top: 32px; font-size: 13px; }</style></head><body>
+<main>
+<header><h1>RoundTrip.lean</h1><p class="sub">A step-by-step walkthrough of 14 proofs. Each step shows the tactic, what it does, and the goals Lean is left with. Use ← and → to step through.</p><p><a class="button" href="https://live.lean-lang.org/#code=import%20AES.Linear%0A%0A%2F-%21%0A%23%20Decryption%20undoes%20encryption%0A%0A%60InvCipher%60%20inverts%20%60Cipher%60%20for%20every%20choice%20of%20round%20keys%2C%20not%20only%20the%20ones%20%60KeyExpansion%60%20produces%2C%0Aso%20the%20theorem%20for%20AES-256%20is%20a%20corollary.%20Each%20step%20undoes%20cleanly%3A%20%60AddRoundKey%60%20is%20its%20own%20inverse%2C%0A%60InvShiftRows%60%20puts%20every%20byte%20back%2C%20%60InvSubBytes%60%20reads%20the%20S-box%20backwards%20%28checked%20on%20all%20256%0Abytes%29%2C%20and%20%60InvMixColumns%60%20multiplies%20by%20the%20inverse%20matrix.%20The%20only%20real%20work%20is%20lining%20up%20the%20rounds%3A%0Aencryption%20runs%20them%20%601%2C%202%2C%20%E2%80%A6%2C%2013%60%20and%20decryption%20%6013%2C%2012%2C%20%E2%80%A6%2C%201%60.%0A-%2F%0A%0Anamespace%20AES%0A%0A%2F-%21%20%23%23%20Each%20transformation%20and%20its%20inverse%20-%2F%0A%0Atheorem%20addRoundKey_addRoundKey%20%28s%20k%20%3A%20State%29%20%3A%20addRoundKey%20%28addRoundKey%20s%20k%29%20k%20%3D%20s%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%2C%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%2C%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%2C%20%E2%9F%A8d0%2C%20d1%2C%20d2%2C%20d3%E2%9F%A9%E2%9F%A9%20%3A%3D%20s%0A%20%20simp%20%5BaddRoundKey%2C%20UInt8.xor_assoc%5D%0A%0Atheorem%20invShiftRows_shiftRows%20%28s%20%3A%20State%29%20%3A%20invShiftRows%20%28shiftRows%20s%29%20%3D%20s%20%3A%3D%20rfl%0Atheorem%20shiftRows_invShiftRows%20%28s%20%3A%20State%29%20%3A%20shiftRows%20%28invShiftRows%20s%29%20%3D%20s%20%3A%3D%20rfl%0A%0Atheorem%20invSubBytes_subBytes%20%28s%20%3A%20State%29%20%3A%20invSubBytes%20%28subBytes%20s%29%20%3D%20s%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%2C%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%2C%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%2C%20%E2%9F%A8d0%2C%20d1%2C%20d2%2C%20d3%E2%9F%A9%E2%9F%A9%20%3A%3D%20s%0A%20%20simp%20%5BinvSubBytes%2C%20subBytes%2C%20invSbox_sbox%5D%0A%0Atheorem%20subBytes_invSubBytes%20%28s%20%3A%20State%29%20%3A%20subBytes%20%28invSubBytes%20s%29%20%3D%20s%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%2C%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%2C%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%2C%20%E2%9F%A8d0%2C%20d1%2C%20d2%2C%20d3%E2%9F%A9%E2%9F%A9%20%3A%3D%20s%0A%20%20simp%20%5BinvSubBytes%2C%20subBytes%2C%20sbox_invSbox%5D%0A%0Atheorem%20invMixColumns_mixColumns%20%28s%20%3A%20State%29%20%3A%20invMixColumns%20%28mixColumns%20s%29%20%3D%20s%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%20%3A%3D%20s%0A%20%20simp%20%5BinvMixColumns%2C%20mixColumns%2C%20invMixColumn_mixColumn%5D%0A%0Atheorem%20mixColumns_invMixColumns%20%28s%20%3A%20State%29%20%3A%20mixColumns%20%28invMixColumns%20s%29%20%3D%20s%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%20%3A%3D%20s%0A%20%20simp%20%5BinvMixColumns%2C%20mixColumns%2C%20mixColumn_invMixColumn%5D%0A%0A%2F-%21%20%23%23%20Lining%20up%20the%20rounds%20-%2F%0A%0Asection%0Avariable%20%28rk%20%3A%20Nat%20%E2%86%92%20State%29%0A%0A%2F--%20One%20middle%20round%20of%20Algorithm%201.%20-%2F%0Aabbrev%20round%20%28r%20%3A%20Nat%29%20%28s%20%3A%20State%29%20%3A%20State%20%3A%3D%20addRoundKey%20%28mixColumns%20%28shiftRows%20%28subBytes%20s%29%29%29%20%28rk%20r%29%0A%0A%2F--%20One%20middle%20round%20of%20Algorithm%203.%20-%2F%0Aabbrev%20invRound%20%28r%20%3A%20Nat%29%20%28s%20%3A%20State%29%20%3A%20State%20%3A%3D%20invMixColumns%20%28addRoundKey%20%28invSubBytes%20%28invShiftRows%20s%29%29%20%28rk%20r%29%29%0A%0A%2F--%20%60cipherRounds%60%20peels%20off%20its%20first%20round%20by%20definition%3B%20this%20peels%20off%20its%20last.%20-%2F%0Atheorem%20cipherRounds_succ%20%28n%20r%20%3A%20Nat%29%20%28s%20%3A%20State%29%20%3A%0A%20%20%20%20cipherRounds%20rk%20%28n%20%2B%201%29%20r%20s%20%3D%20round%20rk%20%28r%20%2B%20n%29%20%28cipherRounds%20rk%20n%20r%20s%29%20%3A%3D%20by%0A%20%20induction%20n%20generalizing%20r%20s%20with%0A%20%20%7C%20zero%20%3D%3E%20rfl%0A%20%20%7C%20succ%20n%20ih%20%3D%3E%0A%20%20%20%20rw%20%5BcipherRounds%2C%20ih%2C%20cipherRounds%2C%20Nat.add_right_comm%2C%20Nat.add_assoc%5D%0A%0Atheorem%20invCipherRounds_succ%20%28n%20r%20%3A%20Nat%29%20%28s%20%3A%20State%29%20%3A%0A%20%20%20%20invCipherRounds%20rk%20%28n%20%2B%201%29%20r%20s%20%3D%20invRound%20rk%20%28r%20-%20n%29%20%28invCipherRounds%20rk%20n%20r%20s%29%20%3A%3D%20by%0A%20%20induction%20n%20generalizing%20r%20s%20with%0A%20%20%7C%20zero%20%3D%3E%20rfl%0A%20%20%7C%20succ%20n%20ih%20%3D%3E%0A%20%20%20%20rw%20%5BinvCipherRounds%2C%20ih%2C%20invCipherRounds%2C%20Nat.sub_sub%2C%20Nat.add_comm%201%20n%5D%0A%0A%2F--%20Decryption%27s%20round%20%60k%60%20undoes%20encryption%27s%20round%20%60k%60%2C%20seen%20through%20%60SubBytes%60%20and%20%60ShiftRows%60.%20-%2F%0Atheorem%20invRound_round%20%28k%20%3A%20Nat%29%20%28m%20%3A%20State%29%20%3A%0A%20%20%20%20invRound%20rk%20k%20%28shiftRows%20%28subBytes%20%28round%20rk%20k%20m%29%29%29%20%3D%20shiftRows%20%28subBytes%20m%29%20%3A%3D%20by%0A%20%20simp%20only%20%5BinvRound%2C%20round%2C%20invShiftRows_shiftRows%2C%20invSubBytes_subBytes%2C%20addRoundKey_addRoundKey%2C%0A%20%20%20%20invMixColumns_mixColumns%5D%0A%0Atheorem%20round_invRound%20%28k%20%3A%20Nat%29%20%28m%20%3A%20State%29%20%3A%0A%20%20%20%20round%20rk%20k%20%28invSubBytes%20%28invShiftRows%20%28invRound%20rk%20k%20m%29%29%29%20%3D%20invSubBytes%20%28invShiftRows%20m%29%20%3A%3D%20by%0A%20%20simp%20only%20%5BinvRound%2C%20round%2C%20subBytes_invSubBytes%2C%20shiftRows_invShiftRows%2C%20mixColumns_invMixColumns%2C%0A%20%20%20%20addRoundKey_addRoundKey%5D%0A%0A%2F--%20%60n%60%20rounds%20of%20decryption%2C%20starting%20from%20round%20%60r%20%2B%20n%60%2C%20undo%20%60n%60%20rounds%20of%20encryption%20starting%20from%0Around%20%60r%20%2B%201%60.%20-%2F%0Atheorem%20invCipherRounds_cipherRounds%20%28n%20r%20%3A%20Nat%29%20%28s%20%3A%20State%29%20%3A%0A%20%20%20%20invCipherRounds%20rk%20n%20%28r%20%2B%20n%29%20%28shiftRows%20%28subBytes%20%28cipherRounds%20rk%20n%20%28r%20%2B%201%29%20s%29%29%29%20%3D%0A%20%20%20%20%20%20shiftRows%20%28subBytes%20s%29%20%3A%3D%20by%0A%20%20induction%20n%20generalizing%20s%20with%0A%20%20%7C%20zero%20%3D%3E%20rfl%0A%20%20%7C%20succ%20n%20ih%20%3D%3E%0A%20%20%20%20rw%20%5BcipherRounds_succ%2C%20invCipherRounds%2C%20show%20r%20%2B%201%20%2B%20n%20%3D%20r%20%2B%20%28n%20%2B%201%29%20by%20omega%2C%0A%20%20%20%20%20%20show%20r%20%2B%20%28n%20%2B%201%29%20-%201%20%3D%20r%20%2B%20n%20by%20omega%5D%0A%20%20%20%20simp%20only%20%5Bround%2C%20invShiftRows_shiftRows%2C%20invSubBytes_subBytes%2C%20addRoundKey_addRoundKey%2C%0A%20%20%20%20%20%20invMixColumns_mixColumns%2C%20ih%5D%0A%0Atheorem%20cipherRounds_invCipherRounds%20%28n%20r%20%3A%20Nat%29%20%28s%20%3A%20State%29%20%3A%0A%20%20%20%20cipherRounds%20rk%20n%20%28r%20%2B%201%29%20%28invSubBytes%20%28invShiftRows%20%28invCipherRounds%20rk%20n%20%28r%20%2B%20n%29%20s%29%29%29%20%3D%0A%20%20%20%20%20%20invSubBytes%20%28invShiftRows%20s%29%20%3A%3D%20by%0A%20%20induction%20n%20generalizing%20r%20s%20with%0A%20%20%7C%20zero%20%3D%3E%20rfl%0A%20%20%7C%20succ%20n%20ih%20%3D%3E%0A%20%20%20%20rw%20%5BinvCipherRounds_succ%2C%20cipherRounds%2C%20show%20r%20%2B%20%28n%20%2B%201%29%20-%20n%20%3D%20r%20%2B%201%20by%20omega%2C%0A%20%20%20%20%20%20show%20r%20%2B%20%28n%20%2B%201%29%20%3D%20r%20%2B%201%20%2B%20n%20by%20omega%5D%0A%20%20%20%20simp%20only%20%5BinvRound%2C%20subBytes_invSubBytes%2C%20shiftRows_invShiftRows%2C%20mixColumns_invMixColumns%2C%0A%20%20%20%20%20%20addRoundKey_addRoundKey%5D%0A%20%20%20%20exact%20ih%20%28r%20%2B%201%29%20s%0A%0A%2F--%20%60InvCipher%60%20inverts%20%60Cipher%60%2C%20for%20any%20round%20keys.%20-%2F%0Atheorem%20invCipher_cipher%20%28p%20%3A%20State%29%20%3A%20invCipher%20rk%20%28cipher%20rk%20p%29%20%3D%20p%20%3A%3D%20by%0A%20%20simp%20only%20%5BinvCipher%2C%20cipher%2C%20addRoundKey_addRoundKey%5D%0A%20%20rw%20%5Bshow%20Nr%20-%201%20%3D%200%20%2B%2013%20from%20rfl%2C%20show%20%281%20%3A%20Nat%29%20%3D%200%20%2B%201%20from%20rfl%2C%20invCipherRounds_cipherRounds%2C%0A%20%20%20%20invShiftRows_shiftRows%2C%20invSubBytes_subBytes%2C%20addRoundKey_addRoundKey%5D%0A%0A%2F--%20%60Cipher%60%20inverts%20%60InvCipher%60%2C%20for%20any%20round%20keys.%20-%2F%0Atheorem%20cipher_invCipher%20%28c%20%3A%20State%29%20%3A%20cipher%20rk%20%28invCipher%20rk%20c%29%20%3D%20c%20%3A%3D%20by%0A%20%20simp%20only%20%5BinvCipher%2C%20cipher%2C%20addRoundKey_addRoundKey%5D%0A%20%20rw%20%5Bshow%20Nr%20-%201%20%3D%200%20%2B%2013%20from%20rfl%2C%20show%20%281%20%3A%20Nat%29%20%3D%200%20%2B%201%20from%20rfl%2C%20cipherRounds_invCipherRounds%2C%0A%20%20%20%20subBytes_invSubBytes%2C%20shiftRows_invShiftRows%2C%20addRoundKey_addRoundKey%5D%0A%0Aend%0A%0A%2F-%21%20%23%23%20AES-256%20-%2F%0A%0A%2F--%20Decryption%20undoes%20encryption%3A%20for%20every%20256-bit%20key%20and%20every%20128-bit%20block.%20-%2F%0Atheorem%20decrypt_encrypt%20%28key%20%3A%20Key%29%20%28p%20%3A%20State%29%20%3A%20decrypt%20key%20%28encrypt%20key%20p%29%20%3D%20p%20%3A%3D%0A%20%20invCipher_cipher%20_%20p%0A%0A%2F--%20And%20the%20other%20way%20round%2C%20so%20encryption%20under%20a%20fixed%20key%20is%20a%20permutation%20of%20the%202%C2%B9%C2%B2%E2%81%B8%20blocks.%20-%2F%0Atheorem%20encrypt_decrypt%20%28key%20%3A%20Key%29%20%28c%20%3A%20State%29%20%3A%20encrypt%20key%20%28decrypt%20key%20c%29%20%3D%20c%20%3A%3D%0A%20%20cipher_invCipher%20_%20c%0A%0Atheorem%20encrypt_injective%20%28key%20%3A%20Key%29%20%7Bp%20q%20%3A%20State%7D%20%28h%20%3A%20encrypt%20key%20p%20%3D%20encrypt%20key%20q%29%20%3A%20p%20%3D%20q%20%3A%3D%20by%0A%20%20rw%20%5B%E2%86%90%20decrypt_encrypt%20key%20p%2C%20h%2C%20decrypt_encrypt%5D%0A%0Aend%20AES%0A">Run this file in the Lean 4 web editor ↗</a></p></header>
+<nav><strong>Proofs</strong> <a href="#p16">addRoundKey_addRoundKey</a> <a href="#p23">invSubBytes_subBytes</a> <a href="#p27">subBytes_invSubBytes</a> <a href="#p31">invMixColumns_mixColumns</a> <a href="#p35">mixColumns_invMixColumns</a> <a href="#p51">cipherRounds_succ</a> <a href="#p58">invCipherRounds_succ</a> <a href="#p66">invRound_round</a> <a href="#p71">round_invRound</a> <a href="#p78">invCipherRounds_cipherRounds</a> <a href="#p89">cipherRounds_invCipherRounds</a> <a href="#p102">invCipher_cipher</a> <a href="#p108">cipher_invCipher</a> <a href="#p125">encrypt_injective</a></nav>
+<section class="proof" id="p16">
+<h2>addRoundKey_addRoundKey <span class="line">line 17</span></h2>
+<pre class="code">theorem addRoundKey_addRoundKey (s k : State) : addRoundKey (addRoundKey s k) k = s := by</pre>
+<p class="words">In words: addRoundKey (addRoundKey s k) k equals s</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s k : State
+⊢ addRoundKey (addRoundKey s k) k = s</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := s</code><span class="change">+a0  +a1  +a2  +a3  +b0  +b1  +b2  +b3  +c0  +c1  +c2  +c3  +d0  +d1  +d2  +d3  −s</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">k : State
+a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 : Byte
+⊢ addRoundKey
+    (addRoundKey
+      { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+      k)
+    k =
+  { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [addRoundKey, UInt8.xor_assoc]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p23">
+<h2>invSubBytes_subBytes <span class="line">line 24</span></h2>
+<pre class="code">theorem invSubBytes_subBytes (s : State) : invSubBytes (subBytes s) = s := by</pre>
+<p class="words">In words: invSubBytes (subBytes s) equals s</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s : State
+⊢ invSubBytes (subBytes s) = s</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := s</code><span class="change">+a0  +a1  +a2  +a3  +b0  +b1  +b2  +b3  +c0  +c1  +c2  +c3  +d0  +d1  +d2  +d3  −s</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 : Byte
+⊢ invSubBytes
+    (subBytes
+      { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }) =
+  { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [invSubBytes, subBytes, invSbox_sbox]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p27">
+<h2>subBytes_invSubBytes <span class="line">line 28</span></h2>
+<pre class="code">theorem subBytes_invSubBytes (s : State) : subBytes (invSubBytes s) = s := by</pre>
+<p class="words">In words: subBytes (invSubBytes s) equals s</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s : State
+⊢ subBytes (invSubBytes s) = s</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := s</code><span class="change">+a0  +a1  +a2  +a3  +b0  +b1  +b2  +b3  +c0  +c1  +c2  +c3  +d0  +d1  +d2  +d3  −s</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 : Byte
+⊢ subBytes
+    (invSubBytes
+      { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }) =
+  { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [invSubBytes, subBytes, sbox_invSbox]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p31">
+<h2>invMixColumns_mixColumns <span class="line">line 32</span></h2>
+<pre class="code">theorem invMixColumns_mixColumns (s : State) : invMixColumns (mixColumns s) = s := by</pre>
+<p class="words">In words: invMixColumns (mixColumns s) equals s</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s : State
+⊢ invMixColumns (mixColumns s) = s</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨c0, c1, c2, c3⟩ := s</code><span class="change">+c0  +c1  +c2  +c3  −s</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">c0 c1 c2 c3 : Word
+⊢ invMixColumns (mixColumns { c0 := c0, c1 := c1, c2 := c2, c3 := c3 }) = { c0 := c0, c1 := c1, c2 := c2, c3 := c3 }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [invMixColumns, mixColumns, invMixColumn_mixColumn]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p35">
+<h2>mixColumns_invMixColumns <span class="line">line 36</span></h2>
+<pre class="code">theorem mixColumns_invMixColumns (s : State) : mixColumns (invMixColumns s) = s := by</pre>
+<p class="words">In words: mixColumns (invMixColumns s) equals s</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s : State
+⊢ mixColumns (invMixColumns s) = s</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨c0, c1, c2, c3⟩ := s</code><span class="change">+c0  +c1  +c2  +c3  −s</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">c0 c1 c2 c3 : Word
+⊢ mixColumns (invMixColumns { c0 := c0, c1 := c1, c2 := c2, c3 := c3 }) = { c0 := c0, c1 := c1, c2 := c2, c3 := c3 }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [invMixColumns, mixColumns, mixColumn_invMixColumn]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p51">
+<h2>cipherRounds_succ <span class="line">line 52</span></h2>
+<pre class="code">theorem cipherRounds_succ (n r : Nat) (s : State) :
+    cipherRounds rk (n + 1) r s = round rk (r + n) (cipherRounds rk n r s) := by</pre>
+<p class="words">In words: cipherRounds rk (n + 1) r s equals round rk (r + n) (cipherRounds rk n r s)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+n r : Nat
+s : State
+⊢ cipherRounds rk (n + 1) r s = round rk (r + n) (cipherRounds rk n r s)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>induction n generalizing r s with</code><span class="change">continues below</span></div><p class="explain">Proves a statement for every number (or list, or tree): prove it for the base case, then for the next one assuming the previous (the induction hypothesis).</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| zero =&gt; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| succ n ih =&gt;</code><span class="change">continues below</span></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [cipherRounds, ih, cipherRounds, Nat.add_right_comm, Nat.add_assoc]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p58">
+<h2>invCipherRounds_succ <span class="line">line 59</span></h2>
+<pre class="code">theorem invCipherRounds_succ (n r : Nat) (s : State) :
+    invCipherRounds rk (n + 1) r s = invRound rk (r - n) (invCipherRounds rk n r s) := by</pre>
+<p class="words">In words: invCipherRounds rk (n + 1) r s equals invRound rk (r - n) (invCipherRounds rk n r s)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+n r : Nat
+s : State
+⊢ invCipherRounds rk (n + 1) r s = invRound rk (r - n) (invCipherRounds rk n r s)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>induction n generalizing r s with</code><span class="change">continues below</span></div><p class="explain">Proves a statement for every number (or list, or tree): prove it for the base case, then for the next one assuming the previous (the induction hypothesis).</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| zero =&gt; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| succ n ih =&gt;</code><span class="change">continues below</span></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [invCipherRounds, ih, invCipherRounds, Nat.sub_sub, Nat.add_comm 1 n]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p66">
+<h2>invRound_round <span class="line">line 67</span></h2>
+<pre class="code">theorem invRound_round (k : Nat) (m : State) :
+    invRound rk k (shiftRows (subBytes (round rk k m))) = shiftRows (subBytes m) := by</pre>
+<p class="words">In words: invRound rk k (shiftRows (subBytes (round rk k m))) equals shiftRows (subBytes m)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+k : Nat
+m : State
+⊢ invRound rk k (shiftRows (subBytes (round rk k m))) = shiftRows (subBytes m)</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [invRound, round, invShiftRows_shiftRows, invSubBytes_subBytes, addRoundKey_addRoundKey,</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>invMixColumns_mixColumns]</code><span class="change">no change</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p71">
+<h2>round_invRound <span class="line">line 72</span></h2>
+<pre class="code">theorem round_invRound (k : Nat) (m : State) :
+    round rk k (invSubBytes (invShiftRows (invRound rk k m))) = invSubBytes (invShiftRows m) := by</pre>
+<p class="words">In words: round rk k (invSubBytes (invShiftRows (invRound rk k m))) equals invSubBytes (invShiftRows m)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+k : Nat
+m : State
+⊢ round rk k (invSubBytes (invShiftRows (invRound rk k m))) = invSubBytes (invShiftRows m)</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [invRound, round, subBytes_invSubBytes, shiftRows_invShiftRows, mixColumns_invMixColumns,</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>addRoundKey_addRoundKey]</code><span class="change">no change</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p78">
+<h2>invCipherRounds_cipherRounds <span class="line">line 79</span></h2>
+<pre class="code">theorem invCipherRounds_cipherRounds (n r : Nat) (s : State) :
+    invCipherRounds rk n (r + n) (shiftRows (subBytes (cipherRounds rk n (r + 1) s))) =
+      shiftRows (subBytes s) := by</pre>
+<p class="words">In words: invCipherRounds rk n (r + n) (shiftRows (subBytes (cipherRounds rk n (r + 1) s))) equals shiftRows (subBytes s)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+n r : Nat
+s : State
+⊢ invCipherRounds rk n (r + n) (shiftRows (subBytes (cipherRounds rk n (r + 1) s))) = shiftRows (subBytes s)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>induction n generalizing s with</code><span class="change">continues below</span></div><p class="explain">Proves a statement for every number (or list, or tree): prove it for the base case, then for the next one assuming the previous (the induction hypothesis).</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| zero =&gt; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| succ n ih =&gt;</code><span class="change">continues below</span></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [cipherRounds_succ, invCipherRounds, show r + 1 + n = r + (n + 1) by omega,</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>show r + (n + 1) - 1 = r + n by omega]</code><span class="change">goal rewritten</span></div><p class="explain">Restates the goal in a form you choose (it must mean the same thing); also helps readers.</p><div class="state"><pre class="goal">case succ
+rk : Nat → State
+r n : Nat
+ih : ∀ (s : State),
+  invCipherRounds rk n (r + n) (shiftRows (subBytes (cipherRounds rk n (r + 1) s))) = shiftRows (subBytes s)
+s : State
+⊢ invCipherRounds rk n (r + n)
+    (invMixColumns
+      (addRoundKey
+        (invSubBytes (invShiftRows (shiftRows (subBytes (round rk (r + (n + 1)) (cipherRounds rk n (r + 1) s))))))
+        (rk (r + (n + 1))))) =
+  shiftRows (subBytes s)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [round, invShiftRows_shiftRows, invSubBytes_subBytes, addRoundKey_addRoundKey,</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>invMixColumns_mixColumns, ih]</code><span class="change">no change</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p89">
+<h2>cipherRounds_invCipherRounds <span class="line">line 90</span></h2>
+<pre class="code">theorem cipherRounds_invCipherRounds (n r : Nat) (s : State) :
+    cipherRounds rk n (r + 1) (invSubBytes (invShiftRows (invCipherRounds rk n (r + n) s))) =
+      invSubBytes (invShiftRows s) := by</pre>
+<p class="words">In words: cipherRounds rk n (r + 1) (invSubBytes (invShiftRows (invCipherRounds rk n (r + n) s))) equals invSubBytes (invShiftRows s)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+n r : Nat
+s : State
+⊢ cipherRounds rk n (r + 1) (invSubBytes (invShiftRows (invCipherRounds rk n (r + n) s))) = invSubBytes (invShiftRows s)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>induction n generalizing r s with</code><span class="change">continues below</span></div><p class="explain">Proves a statement for every number (or list, or tree): prove it for the base case, then for the next one assuming the previous (the induction hypothesis).</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| zero =&gt; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| succ n ih =&gt;</code><span class="change">continues below</span></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [invCipherRounds_succ, cipherRounds, show r + (n + 1) - n = r + 1 by omega,</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>show r + (n + 1) = r + 1 + n by omega]</code><span class="change">goal rewritten</span></div><p class="explain">Restates the goal in a form you choose (it must mean the same thing); also helps readers.</p><div class="state"><pre class="goal">case succ
+rk : Nat → State
+n : Nat
+ih : ∀ (r : Nat) (s : State),
+  cipherRounds rk n (r + 1) (invSubBytes (invShiftRows (invCipherRounds rk n (r + n) s))) = invSubBytes (invShiftRows s)
+r : Nat
+s : State
+⊢ cipherRounds rk n (r + 1 + 1)
+    (addRoundKey
+      (mixColumns
+        (shiftRows (subBytes (invSubBytes (invShiftRows (invRound rk (r + 1) (invCipherRounds rk n (r + 1 + n) s)))))))
+      (rk (r + 1))) =
+  invSubBytes (invShiftRows s)</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [invRound, subBytes_invSubBytes, shiftRows_invShiftRows, mixColumns_invMixColumns,</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>addRoundKey_addRoundKey]</code><span class="change">no change</span></div><div class="state"><pre class="goal">case succ
+rk : Nat → State
+n : Nat
+ih : ∀ (r : Nat) (s : State),
+  cipherRounds rk n (r + 1) (invSubBytes (invShiftRows (invCipherRounds rk n (r + n) s))) = invSubBytes (invShiftRows s)
+r : Nat
+s : State
+⊢ cipherRounds rk n (r + 1 + 1) (invSubBytes (invShiftRows (invCipherRounds rk n (r + 1 + n) s))) =
+  invSubBytes (invShiftRows s)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>exact ih (r + 1) s</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p102">
+<h2>invCipher_cipher <span class="line">line 103</span></h2>
+<pre class="code">theorem invCipher_cipher (p : State) : invCipher rk (cipher rk p) = p := by</pre>
+<p class="words">In words: invCipher rk (cipher rk p) equals p</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+p : State
+⊢ invCipher rk (cipher rk p) = p</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [invCipher, cipher, addRoundKey_addRoundKey]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">rk : Nat → State
+p : State
+⊢ addRoundKey
+    (invSubBytes
+      (invShiftRows
+        (invCipherRounds rk (Nr - 1) (Nr - 1)
+          (shiftRows (subBytes (cipherRounds rk (Nr - 1) 1 (addRoundKey p (rk 0))))))))
+    (rk 0) =
+  p</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [show Nr - 1 = 0 + 13 from rfl, show (1 : Nat) = 0 + 1 from rfl, invCipherRounds_cipherRounds,</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>invShiftRows_shiftRows, invSubBytes_subBytes, addRoundKey_addRoundKey]</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p108">
+<h2>cipher_invCipher <span class="line">line 109</span></h2>
+<pre class="code">theorem cipher_invCipher (c : State) : cipher rk (invCipher rk c) = c := by</pre>
+<p class="words">In words: cipher rk (invCipher rk c) equals c</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">rk : Nat → State
+c : State
+⊢ cipher rk (invCipher rk c) = c</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [invCipher, cipher, addRoundKey_addRoundKey]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">rk : Nat → State
+c : State
+⊢ addRoundKey
+    (shiftRows
+      (subBytes
+        (cipherRounds rk (Nr - 1) 1
+          (invSubBytes (invShiftRows (invCipherRounds rk (Nr - 1) (Nr - 1) (addRoundKey c (rk Nr))))))))
+    (rk Nr) =
+  c</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [show Nr - 1 = 0 + 13 from rfl, show (1 : Nat) = 0 + 1 from rfl, cipherRounds_invCipherRounds,</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>subBytes_invSubBytes, shiftRows_invShiftRows, addRoundKey_addRoundKey]</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p125">
+<h2>encrypt_injective <span class="line">line 126</span></h2>
+<pre class="code">theorem encrypt_injective (key : Key) {p q : State} (h : encrypt key p = encrypt key q) : p = q := by</pre>
+<p class="words">In words: p equals q</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">key : Key
+p q : State
+h : encrypt key p = encrypt key q
+⊢ p = q</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [← decrypt_encrypt key p, h, decrypt_encrypt]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<details class="source"><summary>The whole file</summary><pre class="code">import AES.Linear
+
+/-!
+# Decryption undoes encryption
+
+`InvCipher` inverts `Cipher` for every choice of round keys, not only the ones `KeyExpansion` produces,
+so the theorem for AES-256 is a corollary. Each step undoes cleanly: `AddRoundKey` is its own inverse,
+`InvShiftRows` puts every byte back, `InvSubBytes` reads the S-box backwards (checked on all 256
+bytes), and `InvMixColumns` multiplies by the inverse matrix. The only real work is lining up the rounds:
+encryption runs them `1, 2, …, 13` and decryption `13, 12, …, 1`.
+-/
+
+namespace AES
+
+/-! ## Each transformation and its inverse -/
+
+theorem addRoundKey_addRoundKey (s k : State) : addRoundKey (addRoundKey s k) k = s := by
+  obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := s
+  simp [addRoundKey, UInt8.xor_assoc]
+
+theorem invShiftRows_shiftRows (s : State) : invShiftRows (shiftRows s) = s := rfl
+theorem shiftRows_invShiftRows (s : State) : shiftRows (invShiftRows s) = s := rfl
+
+theorem invSubBytes_subBytes (s : State) : invSubBytes (subBytes s) = s := by
+  obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := s
+  simp [invSubBytes, subBytes, invSbox_sbox]
+
+theorem subBytes_invSubBytes (s : State) : subBytes (invSubBytes s) = s := by
+  obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := s
+  simp [invSubBytes, subBytes, sbox_invSbox]
+
+theorem invMixColumns_mixColumns (s : State) : invMixColumns (mixColumns s) = s := by
+  obtain ⟨c0, c1, c2, c3⟩ := s
+  simp [invMixColumns, mixColumns, invMixColumn_mixColumn]
+
+theorem mixColumns_invMixColumns (s : State) : mixColumns (invMixColumns s) = s := by
+  obtain ⟨c0, c1, c2, c3⟩ := s
+  simp [invMixColumns, mixColumns, mixColumn_invMixColumn]
+
+/-! ## Lining up the rounds -/
+
+section
+variable (rk : Nat → State)
+
+/-- One middle round of Algorithm 1. -/
+abbrev round (r : Nat) (s : State) : State := addRoundKey (mixColumns (shiftRows (subBytes s))) (rk r)
+
+/-- One middle round of Algorithm 3. -/
+abbrev invRound (r : Nat) (s : State) : State := invMixColumns (addRoundKey (invSubBytes (invShiftRows s)) (rk r))
+
+/-- `cipherRounds` peels off its first round by definition; this peels off its last. -/
+theorem cipherRounds_succ (n r : Nat) (s : State) :
+    cipherRounds rk (n + 1) r s = round rk (r + n) (cipherRounds rk n r s) := by
+  induction n generalizing r s with
+  | zero =&gt; rfl
+  | succ n ih =&gt;
+    rw [cipherRounds, ih, cipherRounds, Nat.add_right_comm, Nat.add_assoc]
+
+theorem invCipherRounds_succ (n r : Nat) (s : State) :
+    invCipherRounds rk (n + 1) r s = invRound rk (r - n) (invCipherRounds rk n r s) := by
+  induction n generalizing r s with
+  | zero =&gt; rfl
+  | succ n ih =&gt;
+    rw [invCipherRounds, ih, invCipherRounds, Nat.sub_sub, Nat.add_comm 1 n]
+
+/-- Decryption&#39;s round `k` undoes encryption&#39;s round `k`, seen through `SubBytes` and `ShiftRows`. -/
+theorem invRound_round (k : Nat) (m : State) :
+    invRound rk k (shiftRows (subBytes (round rk k m))) = shiftRows (subBytes m) := by
+  simp only [invRound, round, invShiftRows_shiftRows, invSubBytes_subBytes, addRoundKey_addRoundKey,
+    invMixColumns_mixColumns]
+
+theorem round_invRound (k : Nat) (m : State) :
+    round rk k (invSubBytes (invShiftRows (invRound rk k m))) = invSubBytes (invShiftRows m) := by
+  simp only [invRound, round, subBytes_invSubBytes, shiftRows_invShiftRows, mixColumns_invMixColumns,
+    addRoundKey_addRoundKey]
+
+/-- `n` rounds of decryption, starting from round `r + n`, undo `n` rounds of encryption starting from
+round `r + 1`. -/
+theorem invCipherRounds_cipherRounds (n r : Nat) (s : State) :
+    invCipherRounds rk n (r + n) (shiftRows (subBytes (cipherRounds rk n (r + 1) s))) =
+      shiftRows (subBytes s) := by
+  induction n generalizing s with
+  | zero =&gt; rfl
+  | succ n ih =&gt;
+    rw [cipherRounds_succ, invCipherRounds, show r + 1 + n = r + (n + 1) by omega,
+      show r + (n + 1) - 1 = r + n by omega]
+    simp only [round, invShiftRows_shiftRows, invSubBytes_subBytes, addRoundKey_addRoundKey,
+      invMixColumns_mixColumns, ih]
+
+theorem cipherRounds_invCipherRounds (n r : Nat) (s : State) :
+    cipherRounds rk n (r + 1) (invSubBytes (invShiftRows (invCipherRounds rk n (r + n) s))) =
+      invSubBytes (invShiftRows s) := by
+  induction n generalizing r s with
+  | zero =&gt; rfl
+  | succ n ih =&gt;
+    rw [invCipherRounds_succ, cipherRounds, show r + (n + 1) - n = r + 1 by omega,
+      show r + (n + 1) = r + 1 + n by omega]
+    simp only [invRound, subBytes_invSubBytes, shiftRows_invShiftRows, mixColumns_invMixColumns,
+      addRoundKey_addRoundKey]
+    exact ih (r + 1) s
+
+/-- `InvCipher` inverts `Cipher`, for any round keys. -/
+theorem invCipher_cipher (p : State) : invCipher rk (cipher rk p) = p := by
+  simp only [invCipher, cipher, addRoundKey_addRoundKey]
+  rw [show Nr - 1 = 0 + 13 from rfl, show (1 : Nat) = 0 + 1 from rfl, invCipherRounds_cipherRounds,
+    invShiftRows_shiftRows, invSubBytes_subBytes, addRoundKey_addRoundKey]
+
+/-- `Cipher` inverts `InvCipher`, for any round keys. -/
+theorem cipher_invCipher (c : State) : cipher rk (invCipher rk c) = c := by
+  simp only [invCipher, cipher, addRoundKey_addRoundKey]
+  rw [show Nr - 1 = 0 + 13 from rfl, show (1 : Nat) = 0 + 1 from rfl, cipherRounds_invCipherRounds,
+    subBytes_invSubBytes, shiftRows_invShiftRows, addRoundKey_addRoundKey]
+
+end
+
+/-! ## AES-256 -/
+
+/-- Decryption undoes encryption: for every 256-bit key and every 128-bit block. -/
+theorem decrypt_encrypt (key : Key) (p : State) : decrypt key (encrypt key p) = p :=
+  invCipher_cipher _ p
+
+/-- And the other way round, so encryption under a fixed key is a permutation of the 2&#185;&#178;⁸ blocks. -/
+theorem encrypt_decrypt (key : Key) (c : State) : encrypt key (decrypt key c) = c :=
+  cipher_invCipher _ c
+
+theorem encrypt_injective (key : Key) {p q : State} (h : encrypt key p = encrypt key q) : p = q := by
+  rw [← decrypt_encrypt key p, h, decrypt_encrypt]
+
+end AES
+</pre></details>
+<footer>Made with <a href="https://github.com/keithadler/leanstudio">Lean Studio</a>, by Keith Adler (<a href="https://x.com/keithadler">@keithadler</a>). Goals are exactly as Lean reported them.</footer>
+</main>
+<script>
+const steps = [...document.querySelectorAll('.step')];
+let at = -1;
+function go(i) {
+  if (i < 0 || i >= steps.length) return;
+  steps.forEach(s => s.classList.remove('current'));
+  at = i; steps[i].classList.add('current'); steps[i].focus({ preventScroll: true });
+  steps[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+steps.forEach((s, i) => s.addEventListener('click', () => go(i)));
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'j') { go(at + 1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft' || e.key === 'k') { go(at - 1); e.preventDefault(); }
+});</script>
+</body></html>

@@ -15,9 +15,13 @@ set_option maxHeartbeats 0
 
 /-- A 4×4 matrix over GF(2⁸), by rows. -/
 structure Mat where
+  /-- Row 0. -/
   r0 : Word
+  /-- Row 1. -/
   r1 : Word
+  /-- Row 2. -/
   r2 : Word
+  /-- Row 3. -/
   r3 : Word
   deriving DecidableEq, Repr
 
@@ -29,17 +33,22 @@ namespace Mat
 /-- The matrix times a column. -/
 def apply (m : Mat) (w : Word) : Word := ⟨dot m.r0 w, dot m.r1 w, dot m.r2 w, dot m.r3 w⟩
 
-/-- Column `j` of a matrix is `m.apply` of the `j`-th unit vector; spelled out here. -/
+/-- Column 0 of a matrix. -/
 def col0 (m : Mat) : Word := ⟨m.r0.b0, m.r1.b0, m.r2.b0, m.r3.b0⟩
+/-- Column 1 of a matrix. -/
 def col1 (m : Mat) : Word := ⟨m.r0.b1, m.r1.b1, m.r2.b1, m.r3.b1⟩
+/-- Column 2 of a matrix. -/
 def col2 (m : Mat) : Word := ⟨m.r0.b2, m.r1.b2, m.r2.b2, m.r3.b2⟩
+/-- Column 3 of a matrix. -/
 def col3 (m : Mat) : Word := ⟨m.r0.b3, m.r1.b3, m.r2.b3, m.r3.b3⟩
 
+/-- The row vector `a` times the matrix `b`. -/
 def row (a : Word) (b : Mat) : Word := ⟨dot a b.col0, dot a b.col1, dot a b.col2, dot a b.col3⟩
 
 /-- The matrix product. -/
 def mul (a b : Mat) : Mat := ⟨row a.r0 b, row a.r1 b, row a.r2 b, row a.r3 b⟩
 
+/-- The identity matrix. -/
 def one : Mat := ⟨⟨1, 0, 0, 0⟩, ⟨0, 1, 0, 0⟩, ⟨0, 0, 1, 0⟩, ⟨0, 0, 0, 1⟩⟩
 
 theorem dot_apply (r : Word) (b : Mat) (w : Word) : dot r (b.apply w) = dot (row r b) w := by

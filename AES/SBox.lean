@@ -78,12 +78,12 @@ def affine (b : Byte) : Byte :=
 def invAffine (b : Byte) : Byte :=
   ofBits fun i => bit b (i + 2) ^^ bit b (i + 5) ^^ bit b (i + 7) ^^ bit 0x05 i
 
-/-- **Table 4 is what §5.1.1 says it is**: the inverse in GF(2⁸), then the affine map. -/
+/-- Table 4 is what §5.1.1 says it is: the inverse in GF(2⁸), then the affine map. -/
 theorem sbox_eq_affine_inv (b : Byte) : sbox b = affine (inv b) := by
   have : allBytes (fun b => sbox b == affine (inv b)) = true := by decide +kernel
   simpa using allBytes_spec this b
 
-/-- **Table 6 is what §5.3.2 says it is**: the inverse affine map, then the inverse in GF(2⁸). -/
+/-- Table 6 is what §5.3.2 says it is: the inverse affine map, then the inverse in GF(2⁸). -/
 theorem invSbox_eq_inv_invAffine (b : Byte) : invSbox b = inv (invAffine b) := by
   have : allBytes (fun b => invSbox b == inv (invAffine b)) = true := by decide +kernel
   simpa using allBytes_spec this b

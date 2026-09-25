@@ -1,0 +1,1887 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WideTrail.lean · proof walkthrough</title>
+<style>
+:root { --bg:#fbfaf8; --fg:#1d1d1f; --dim:#6b6b70; --card:#ffffff; --line:#e4e2dd; --accent:#3f6fd8; --ok:#1f8a3b; --code:#f3f1ec; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16171a; --fg:#e6e6e9; --dim:#9a9aa3; --card:#1e2024; --line:#2e3036; --accent:#7aa2f7; --ok:#4cc36b; --code:#23252b; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; } h2 { font-size: 20px; margin: 0 0 12px; }
+.sub, .line, .words, footer, .explain { color: var(--dim); }
+.line { font-size: 13px; font-weight: normal; margin-left: 6px; }
+a { color: var(--accent); }
+.button { display:inline-block; padding:6px 14px; border:1px solid var(--accent); border-radius:6px; text-decoration:none; }
+nav { margin: 20px 0; display:flex; flex-wrap:wrap; gap:6px 12px; font-size:14px; }
+pre, code { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+pre.code { background: var(--code); padding: 12px 14px; border-radius: 8px; }
+.proof { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; }
+.state { margin-top: 8px; }
+.state.start { margin: 12px 0 4px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-bottom: 4px; }
+.goal { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 4px 0; background: var(--code); border-radius: 0 6px 6px 0; }
+.none { color: var(--ok); font-weight: 600; }
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 16px 0 0; }
+.step { counter-increment: s; position: relative; padding: 12px 12px 12px 44px; border-top: 1px solid var(--line); outline: none; }
+.step::before { content: counter(s); position: absolute; left: 8px; top: 12px; width: 24px; height: 24px; border-radius: 50%;
+                background: var(--code); color: var(--dim); font-size: 13px; text-align: center; line-height: 24px; }
+.step.done::before { background: var(--ok); color: #fff; content: "✓"; }
+.step.current { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
+.tactic { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.tactic code { font-weight: 600; }
+.change { font-size: 13px; color: var(--dim); }
+.explain { margin: 4px 0 0; font-size: 14px; }
+details.source { margin-top: 24px; } footer { margin-top: 32px; font-size: 13px; }</style></head><body>
+<main>
+<header><h1>WideTrail.lean</h1><p class="sub">A step-by-step walkthrough of 21 proofs. Each step shows the tactic, what it does, and the goals Lean is left with. Use ← and → to step through.</p><p><a class="button" href="https://live.lean-lang.org/#code=import%20AES.Branch%0A%0A%2F-%21%0A%23%20Four%20rounds%20activate%20at%20least%2025%20S-boxes%0A%0AThe%20wide-trail%20bound%20of%20Daemen%20and%20Rijmen%20%28%2AThe%20Design%20of%20Rijndael%2A%2C%20Theorem%209.5.1%29%2C%20stated%20for%20the%0Aactual%20cipher%20rather%20than%20for%20an%20abstraction%20of%20it.%20Run%20two%20different%20blocks%20through%20four%20consecutive%0Arounds%20under%20the%20same%20round%20keys.%20An%20S-box%20is%20%2Aactive%2A%20when%20its%20two%20inputs%20differ.%20Then%20at%20least%2025%20of%0Athe%2064%20S-box%20applications%20are%20active%2C%20whatever%20the%20key%20and%20whatever%20the%20two%20blocks.%0A%0AThat%20is%20the%20fact%20behind%20AES%27s%20resistance%20to%20differential%20cryptanalysis%3A%20every%20active%20S-box%20passes%20a%0Adifference%20with%20probability%20at%20most%204%2F256%20%28%60differential%20uniformity%204%60%2C%20in%20%60SBoxProps.lean%60%29%2C%20so%20any%0Asingle%20four-round%20differential%20trail%20has%20probability%20at%20most%20%60%282%E2%81%BB%E2%81%B6%29%C2%B2%E2%81%B5%20%3D%202%E2%81%BB%C2%B9%E2%81%B5%E2%81%B0%60.%20The%20linear%20bound%20is%20the%0Asame%20argument%20with%20nonlinearity%20112%20in%20place%20of%20uniformity%204.%0A%0AThe%20proof%20is%20the%20one%20in%20the%20book%2C%20with%20nothing%20assumed%3A%0A%0A1.%20%2A%2ATwo%20rounds.%2A%2A%20Before%20%60MixColumns%60%2C%20the%20difference%20has%20as%20many%20nonzero%20bytes%20as%20the%20round%27s%20input%0A%20%20%20difference%20did%2C%20since%20%60SubBytes%60%20is%20a%20bijection%20and%20%60ShiftRows%60%20a%20permutation.%20Each%20active%20column%0A%20%20%20of%20it%2C%20together%20with%20the%20same%20column%20after%20%60MixColumns%60%2C%20has%20at%20least%20five%20nonzero%20bytes%20%28branch%0A%20%20%20number%205%29.%20So%20a%20round%27s%20input%20difference%20and%20the%20next%20round%27s%20together%20have%20at%20least%0A%20%20%20%605%20%C3%97%60%20%28the%20number%20of%20active%20columns%20entering%20%60MixColumns%60%29.%0A2.%20%2A%2AFour%20rounds.%2A%2A%20That%20gives%20%605%20%C3%97%20%28a%E2%82%80%20%2B%20a%E2%82%82%29%60%20with%20%60a%E1%B5%A2%60%20those%20column%20counts%20in%20rounds%201%20and%203.%20Some%0A%20%20%20column%20entering%20round%202%27s%20%60MixColumns%60%20is%20active%2C%20and%20%60ShiftRows%60%20gave%20it%20at%20most%20one%20byte%20from%20each%0A%20%20%20column%20active%20after%20round%201%27s%2C%20so%20it%20has%20at%20most%20%60a%E2%82%80%60%20nonzero%20bytes.%20Branch%20number%205%20leaves%20at%20least%0A%20%20%20%605%20-%20a%E2%82%80%60%20nonzero%20bytes%20in%20that%20column%20after%20%60MixColumns%60%2C%20and%20%60ShiftRows%60%20spreads%20them%20over%20as%20many%0A%20%20%20different%20columns%20in%20round%203.%20So%20%60a%E2%82%82%20%E2%89%A5%205%20-%20a%E2%82%80%60%2C%20and%20the%20total%20is%20at%20least%20%605%20%C3%97%205%60.%0A-%2F%0A%0Anamespace%20AES%0A%0A%2F--%20A%20full%20middle%20round%2C%20as%20in%20lines%205%E2%80%938%20of%20Algorithm%201.%20-%2F%0Adef%20aesRound%20%28k%20s%20%3A%20State%29%20%3A%20State%20%3A%3D%20addRoundKey%20%28mixColumns%20%28shiftRows%20%28subBytes%20s%29%29%29%20k%0A%0A%2F--%20The%20number%20of%20nonzero%20bytes%20of%20a%20state%3A%20for%20a%20difference%2C%20the%20number%20of%20active%20S-boxes%20it%20meets.%20-%2F%0Adef%20State.wt%20%28s%20%3A%20State%29%20%3A%20Nat%20%3A%3D%20s.c0.wt%20%2B%20s.c1.wt%20%2B%20s.c2.wt%20%2B%20s.c3.wt%0A%0A%2F--%20How%20many%20of%20the%20sixteen%20S-boxes%20of%20a%20%60SubBytes%60%20layer%20see%20different%20inputs%20when%20it%20is%20applied%20to%20%60x%60%0Aand%20to%20%60y%60%3A%20the%20active%20S-boxes.%20-%2F%0Adef%20active%20%28x%20y%20%3A%20State%29%20%3A%20Nat%20%3A%3D%20%28x%20%5E%5E%5E%20y%29.wt%0A%0A%2F--%20%601%60%20if%20the%20column%20is%20nonzero.%20-%2F%0Adef%20nzw%20%28w%20%3A%20Word%29%20%3A%20Nat%20%3A%3D%20if%20w.wt%20%3D%200%20then%200%20else%201%0A%0A%2F--%20The%20number%20of%20nonzero%20columns.%20-%2F%0Adef%20State.ac%20%28s%20%3A%20State%29%20%3A%20Nat%20%3A%3D%20nzw%20s.c0%20%2B%20nzw%20s.c1%20%2B%20nzw%20s.c2%20%2B%20nzw%20s.c3%0A%0A%2F-%21%20%23%23%20Bytes%20and%20columns%20-%2F%0A%0Atheorem%20nzw_le%20%28w%20%3A%20Word%29%20%3A%20nzw%20w%20%E2%89%A4%201%20%3A%3D%20by%20unfold%20nzw%3B%20split%20%3C%3B%3E%20omega%0A%0Atheorem%20nz_le_nzw%20%28a%20b%20c%20d%20%3A%20Byte%29%20%3A%0A%20%20%20%20nz%20a%20%E2%89%A4%20nzw%20%E2%9F%A8a%2C%20b%2C%20c%2C%20d%E2%9F%A9%20%E2%88%A7%20nz%20b%20%E2%89%A4%20nzw%20%E2%9F%A8a%2C%20b%2C%20c%2C%20d%E2%9F%A9%20%E2%88%A7%20nz%20c%20%E2%89%A4%20nzw%20%E2%9F%A8a%2C%20b%2C%20c%2C%20d%E2%9F%A9%20%E2%88%A7%20nz%20d%20%E2%89%A4%20nzw%20%E2%9F%A8a%2C%20b%2C%20c%2C%20d%E2%9F%A9%20%3A%3D%20by%0A%20%20have%20%3A%3D%20nz_le%20a%3B%20have%20%3A%3D%20nz_le%20b%3B%20have%20%3A%3D%20nz_le%20c%3B%20have%20%3A%3D%20nz_le%20d%0A%20%20simp%20only%20%5Bnzw%2C%20Word.wt%5D%0A%20%20by_cases%20h%20%3A%20nz%20a%20%2B%20nz%20b%20%2B%20nz%20c%20%2B%20nz%20d%20%3D%200%20%3C%3B%3E%20simp%20only%20%5Bh%2C%20%E2%86%93reduceIte%5D%20%3C%3B%3E%0A%20%20%20%20exact%20%E2%9F%A8by%20omega%2C%20by%20omega%2C%20by%20omega%2C%20by%20omega%E2%9F%A9%0A%0Atheorem%20nzw_le_wt%20%28w%20%3A%20Word%29%20%3A%20nzw%20w%20%E2%89%A4%20w.wt%20%3A%3D%20by%20unfold%20nzw%3B%20split%20%3C%3B%3E%20omega%0A%0A%2F--%20%60SubBytes%60%20keeps%20the%20pattern%20of%20a%20difference%3A%20two%20bytes%20differ%20after%20the%20S-box%20exactly%20when%20they%0Adiffered%20before.%20-%2F%0Atheorem%20nz_sbox_xor%20%28a%20b%20%3A%20Byte%29%20%3A%20nz%20%28sbox%20a%20%5E%5E%5E%20sbox%20b%29%20%3D%20nz%20%28a%20%5E%5E%5E%20b%29%20%3A%3D%20by%0A%20%20unfold%20nz%0A%20%20have%20%3A%20sbox%20a%20%3D%20sbox%20b%20%E2%86%94%20a%20%3D%20b%20%3A%3D%20%E2%9F%A8sbox_injective%2C%20fun%20h%20%3D%3E%20h%20%E2%96%B8%20rfl%E2%9F%A9%0A%20%20simp%20only%20%5BUInt8.xor_eq_zero_iff%2C%20this%5D%0A%0Atheorem%20wt_map_sbox_xor%20%28a%20b%20%3A%20Word%29%20%3A%20%28a.map%20sbox%20%5E%5E%5E%20b.map%20sbox%29.wt%20%3D%20%28a%20%5E%5E%5E%20b%29.wt%20%3A%3D%20by%0A%20%20simp%20only%20%5BWord.wt%2C%20Word.map%2C%20Word.xor_def%2C%20nz_sbox_xor%5D%0A%0A%2F--%20%60MixColumns%60%20keeps%20whether%20a%20column%20difference%20is%20zero.%20-%2F%0Atheorem%20nzw_mixColumn_xor%20%28a%20b%20%3A%20Word%29%20%3A%20nzw%20%28mixColumn%20a%20%5E%5E%5E%20mixColumn%20b%29%20%3D%20nzw%20%28a%20%5E%5E%5E%20b%29%20%3A%3D%20by%0A%20%20rw%20%5B%E2%86%90%20mixColumn_xor%5D%0A%20%20unfold%20nzw%0A%20%20have%20%3A%20mixColumn%20%28a%20%5E%5E%5E%20b%29%20%3D%200%20%E2%86%94%20a%20%5E%5E%5E%20b%20%3D%200%20%3A%3D%20by%0A%20%20%20%20constructor%0A%20%20%20%20%C2%B7%20intro%20h%3B%20rw%20%5B%E2%86%90%20invMixColumn_mixColumn%20%28a%20%5E%5E%5E%20b%29%2C%20h%2C%20invMixColumn_eq%2C%20Mat.apply_zero%5D%0A%20%20%20%20%C2%B7%20intro%20h%3B%20rw%20%5Bh%2C%20mixColumn_eq%2C%20Mat.apply_zero%5D%0A%20%20simp%20only%20%5BWord.wt_eq_zero%2C%20this%5D%0A%0A%2F--%20A%20column%20difference%20and%20its%20image%20under%20%60MixColumns%60%3A%20at%20least%20five%20nonzero%20bytes%20if%20active.%20-%2F%0Atheorem%20branch_col%20%28a%20b%20%3A%20Word%29%20%3A%205%20%2A%20nzw%20%28a%20%5E%5E%5E%20b%29%20%E2%89%A4%20%28a%20%5E%5E%5E%20b%29.wt%20%2B%20%28mixColumn%20a%20%5E%5E%5E%20mixColumn%20b%29.wt%20%3A%3D%20by%0A%20%20by_cases%20h%20%3A%20a%20%3D%20b%0A%20%20%C2%B7%20subst%20h%3B%20simp%20%5Bnzw%2C%20Word.wt_eq_zero%5D%0A%20%20%C2%B7%20have%20%3A%3D%20branch_mixColumn_diff%20h%0A%20%20%20%20have%20%3A%3D%20nzw_le%20%28a%20%5E%5E%5E%20b%29%0A%20%20%20%20omega%0A%0A%2F-%21%20%23%23%20States%20-%2F%0A%0A%2F--%20The%20difference%20entering%20%60MixColumns%60%20in%20a%20round%2C%20from%20the%20round%27s%20two%20inputs.%20-%2F%0Adef%20mcIn%20%28x%20y%20%3A%20State%29%20%3A%20State%20%3A%3D%20shiftRows%20%28subBytes%20x%29%20%5E%5E%5E%20shiftRows%20%28subBytes%20y%29%0A%0Atheorem%20wt_mcIn%20%28x%20y%20%3A%20State%29%20%3A%20%28mcIn%20x%20y%29.wt%20%3D%20%28x%20%5E%5E%5E%20y%29.wt%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%2C%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%2C%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%2C%20%E2%9F%A8d0%2C%20d1%2C%20d2%2C%20d3%E2%9F%A9%E2%9F%A9%20%3A%3D%20x%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8e0%2C%20e1%2C%20e2%2C%20e3%E2%9F%A9%2C%20%E2%9F%A8f0%2C%20f1%2C%20f2%2C%20f3%E2%9F%A9%2C%20%E2%9F%A8g0%2C%20g1%2C%20g2%2C%20g3%E2%9F%A9%2C%20%E2%9F%A8h0%2C%20h1%2C%20h2%2C%20h3%E2%9F%A9%E2%9F%A9%20%3A%3D%20y%0A%20%20simp%20only%20%5BmcIn%2C%20State.wt%2C%20Word.wt%2C%20shiftRows%2C%20subBytes%2C%20State.mapCols%2C%20Word.map%2C%20State.xor_def%2C%0A%20%20%20%20Word.xor_def%2C%20nz_sbox_xor%5D%0A%20%20omega%0A%0A%2F--%20The%20difference%20after%20a%20round%20is%20%60MixColumns%60%20applied%2C%20column%20by%20column%2C%20to%20%60mcIn%60%3B%20the%20round%20keys%0Acancel.%20-%2F%0Atheorem%20aesRound_xor%20%28k%20x%20y%20%3A%20State%29%20%3A%0A%20%20%20%20aesRound%20k%20x%20%5E%5E%5E%20aesRound%20k%20y%20%3D%20mixColumns%20%28shiftRows%20%28subBytes%20x%29%29%20%5E%5E%5E%20mixColumns%20%28shiftRows%20%28subBytes%20y%29%29%20%3A%3D%20by%0A%20%20unfold%20aesRound%20addRoundKey%0A%20%20generalize%20mixColumns%20%28shiftRows%20%28subBytes%20x%29%29%20%3D%20p%0A%20%20generalize%20mixColumns%20%28shiftRows%20%28subBytes%20y%29%29%20%3D%20q%0A%20%20simp%20only%20%5BState.xor_def%2C%20Word.xor_def%2C%20xor_xor_cancel%5D%0A%0A%2F--%20Two%20rounds%3A%20a%20round%27s%20input%20difference%20and%20the%20next%20round%27s%20input%20difference%20have%20at%20least%0A%605%20%C3%97%60%20%28active%20columns%20entering%20%60MixColumns%60%29%20nonzero%20bytes%20between%20them.%20-%2F%0Atheorem%20two_rounds%20%28k%20x%20y%20%3A%20State%29%20%3A%0A%20%20%20%205%20%2A%20%28mcIn%20x%20y%29.ac%20%E2%89%A4%20%28x%20%5E%5E%5E%20y%29.wt%20%2B%20%28aesRound%20k%20x%20%5E%5E%5E%20aesRound%20k%20y%29.wt%20%3A%3D%20by%0A%20%20rw%20%5B%E2%86%90%20wt_mcIn%2C%20aesRound_xor%5D%0A%20%20generalize%20hp%20%3A%20shiftRows%20%28subBytes%20x%29%20%3D%20p%0A%20%20generalize%20hq%20%3A%20shiftRows%20%28subBytes%20y%29%20%3D%20q%0A%20%20have%20hm%20%3A%20mcIn%20x%20y%20%3D%20p%20%5E%5E%5E%20q%20%3A%3D%20by%20rw%20%5BmcIn%2C%20hp%2C%20hq%5D%0A%20%20rw%20%5Bhm%5D%0A%20%20obtain%20%E2%9F%A8p0%2C%20p1%2C%20p2%2C%20p3%E2%9F%A9%20%3A%3D%20p%0A%20%20obtain%20%E2%9F%A8q0%2C%20q1%2C%20q2%2C%20q3%E2%9F%A9%20%3A%3D%20q%0A%20%20have%20%3A%3D%20branch_col%20p0%20q0%3B%20have%20%3A%3D%20branch_col%20p1%20q1%3B%20have%20%3A%3D%20branch_col%20p2%20q2%3B%20have%20%3A%3D%20branch_col%20p3%20q3%0A%20%20simp%20only%20%5BState.ac%2C%20State.wt%2C%20mixColumns%2C%20State.mapCols%2C%20State.xor_def%5D%20at%20%2A%0A%20%20omega%0A%0A%2F--%20The%20active%20columns%20after%20a%20round%20are%20the%20active%20columns%20entering%20its%20%60MixColumns%60.%20-%2F%0Atheorem%20ac_aesRound_xor%20%28k%20x%20y%20%3A%20State%29%20%3A%20%28aesRound%20k%20x%20%5E%5E%5E%20aesRound%20k%20y%29.ac%20%3D%20%28mcIn%20x%20y%29.ac%20%3A%3D%20by%0A%20%20rw%20%5BaesRound_xor%2C%20mcIn%5D%0A%20%20generalize%20shiftRows%20%28subBytes%20x%29%20%3D%20p%0A%20%20generalize%20shiftRows%20%28subBytes%20y%29%20%3D%20q%0A%20%20obtain%20%E2%9F%A8p0%2C%20p1%2C%20p2%2C%20p3%E2%9F%A9%20%3A%3D%20p%0A%20%20obtain%20%E2%9F%A8q0%2C%20q1%2C%20q2%2C%20q3%E2%9F%A9%20%3A%3D%20q%0A%20%20simp%20only%20%5BState.ac%2C%20mixColumns%2C%20State.mapCols%2C%20State.xor_def%2C%20nzw_mixColumn_xor%5D%0A%0A%2F--%20%60ShiftRows%60%20gathers%20each%20column%20from%20four%20different%20columns%2C%20so%20a%20column%20of%20%60mcIn%60%20has%20at%20most%20as%0Amany%20nonzero%20bytes%20as%20the%20round%27s%20input%20difference%20has%20active%20columns.%20-%2F%0Atheorem%20wt_mcIn_col_le%20%28x%20y%20%3A%20State%29%20%3A%0A%20%20%20%20%28mcIn%20x%20y%29.c0.wt%20%E2%89%A4%20%28x%20%5E%5E%5E%20y%29.ac%20%E2%88%A7%20%28mcIn%20x%20y%29.c1.wt%20%E2%89%A4%20%28x%20%5E%5E%5E%20y%29.ac%20%E2%88%A7%0A%20%20%20%20%28mcIn%20x%20y%29.c2.wt%20%E2%89%A4%20%28x%20%5E%5E%5E%20y%29.ac%20%E2%88%A7%20%28mcIn%20x%20y%29.c3.wt%20%E2%89%A4%20%28x%20%5E%5E%5E%20y%29.ac%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%2C%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%2C%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%2C%20%E2%9F%A8d0%2C%20d1%2C%20d2%2C%20d3%E2%9F%A9%E2%9F%A9%20%3A%3D%20x%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8e0%2C%20e1%2C%20e2%2C%20e3%E2%9F%A9%2C%20%E2%9F%A8f0%2C%20f1%2C%20f2%2C%20f3%E2%9F%A9%2C%20%E2%9F%A8g0%2C%20g1%2C%20g2%2C%20g3%E2%9F%A9%2C%20%E2%9F%A8h0%2C%20h1%2C%20h2%2C%20h3%E2%9F%A9%E2%9F%A9%20%3A%3D%20y%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28a0%20%5E%5E%5E%20e0%29%20%28a1%20%5E%5E%5E%20e1%29%20%28a2%20%5E%5E%5E%20e2%29%20%28a3%20%5E%5E%5E%20e3%29%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28b0%20%5E%5E%5E%20f0%29%20%28b1%20%5E%5E%5E%20f1%29%20%28b2%20%5E%5E%5E%20f2%29%20%28b3%20%5E%5E%5E%20f3%29%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28c0%20%5E%5E%5E%20g0%29%20%28c1%20%5E%5E%5E%20g1%29%20%28c2%20%5E%5E%5E%20g2%29%20%28c3%20%5E%5E%5E%20g3%29%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28d0%20%5E%5E%5E%20h0%29%20%28d1%20%5E%5E%5E%20h1%29%20%28d2%20%5E%5E%5E%20h2%29%20%28d3%20%5E%5E%5E%20h3%29%0A%20%20simp%20only%20%5BmcIn%2C%20State.ac%2C%20Word.wt%2C%20shiftRows%2C%20subBytes%2C%20State.mapCols%2C%20Word.map%2C%20State.xor_def%2C%0A%20%20%20%20Word.xor_def%2C%20nz_sbox_xor%5D%20at%20%2A%0A%20%20omega%0A%0A%2F--%20and%2C%20the%20other%20way%2C%20it%20sends%20the%20four%20bytes%20of%20any%20one%20column%20to%20four%20different%20columns.%20-%2F%0Atheorem%20ac_mcIn_ge%20%28x%20y%20%3A%20State%29%20%3A%0A%20%20%20%20%28x%20%5E%5E%5E%20y%29.c0.wt%20%E2%89%A4%20%28mcIn%20x%20y%29.ac%20%E2%88%A7%20%28x%20%5E%5E%5E%20y%29.c1.wt%20%E2%89%A4%20%28mcIn%20x%20y%29.ac%20%E2%88%A7%0A%20%20%20%20%28x%20%5E%5E%5E%20y%29.c2.wt%20%E2%89%A4%20%28mcIn%20x%20y%29.ac%20%E2%88%A7%20%28x%20%5E%5E%5E%20y%29.c3.wt%20%E2%89%A4%20%28mcIn%20x%20y%29.ac%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%2C%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%2C%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%2C%20%E2%9F%A8d0%2C%20d1%2C%20d2%2C%20d3%E2%9F%A9%E2%9F%A9%20%3A%3D%20x%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8e0%2C%20e1%2C%20e2%2C%20e3%E2%9F%A9%2C%20%E2%9F%A8f0%2C%20f1%2C%20f2%2C%20f3%E2%9F%A9%2C%20%E2%9F%A8g0%2C%20g1%2C%20g2%2C%20g3%E2%9F%A9%2C%20%E2%9F%A8h0%2C%20h1%2C%20h2%2C%20h3%E2%9F%A9%E2%9F%A9%20%3A%3D%20y%0A%20%20simp%20only%20%5BmcIn%2C%20State.ac%2C%20Word.wt%2C%20shiftRows%2C%20subBytes%2C%20State.mapCols%2C%20Word.map%2C%20State.xor_def%2C%0A%20%20%20%20Word.xor_def%5D%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28sbox%20a0%20%5E%5E%5E%20sbox%20e0%29%20%28sbox%20b1%20%5E%5E%5E%20sbox%20f1%29%20%28sbox%20c2%20%5E%5E%5E%20sbox%20g2%29%20%28sbox%20d3%20%5E%5E%5E%20sbox%20h3%29%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28sbox%20b0%20%5E%5E%5E%20sbox%20f0%29%20%28sbox%20c1%20%5E%5E%5E%20sbox%20g1%29%20%28sbox%20d2%20%5E%5E%5E%20sbox%20h2%29%20%28sbox%20a3%20%5E%5E%5E%20sbox%20e3%29%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28sbox%20c0%20%5E%5E%5E%20sbox%20g0%29%20%28sbox%20d1%20%5E%5E%5E%20sbox%20h1%29%20%28sbox%20a2%20%5E%5E%5E%20sbox%20e2%29%20%28sbox%20b3%20%5E%5E%5E%20sbox%20f3%29%0A%20%20have%20%3A%3D%20nz_le_nzw%20%28sbox%20d0%20%5E%5E%5E%20sbox%20h0%29%20%28sbox%20a1%20%5E%5E%5E%20sbox%20e1%29%20%28sbox%20b2%20%5E%5E%5E%20sbox%20f2%29%20%28sbox%20c3%20%5E%5E%5E%20sbox%20g3%29%0A%20%20simp%20only%20%5Bnz_sbox_xor%5D%20at%20%2A%0A%20%20omega%0A%0A%2F--%20The%20branch%20number%2C%20applied%20to%20column%20%60j%60%20of%20round%202%27s%20%60MixColumns%60.%20-%2F%0Atheorem%20branch_round_cols%20%28k%20x%20y%20%3A%20State%29%20%3A%0A%20%20%20%205%20%2A%20nzw%20%28mcIn%20x%20y%29.c0%20%E2%89%A4%20%28mcIn%20x%20y%29.c0.wt%20%2B%20%28aesRound%20k%20x%20%5E%5E%5E%20aesRound%20k%20y%29.c0.wt%20%E2%88%A7%0A%20%20%20%205%20%2A%20nzw%20%28mcIn%20x%20y%29.c1%20%E2%89%A4%20%28mcIn%20x%20y%29.c1.wt%20%2B%20%28aesRound%20k%20x%20%5E%5E%5E%20aesRound%20k%20y%29.c1.wt%20%E2%88%A7%0A%20%20%20%205%20%2A%20nzw%20%28mcIn%20x%20y%29.c2%20%E2%89%A4%20%28mcIn%20x%20y%29.c2.wt%20%2B%20%28aesRound%20k%20x%20%5E%5E%5E%20aesRound%20k%20y%29.c2.wt%20%E2%88%A7%0A%20%20%20%205%20%2A%20nzw%20%28mcIn%20x%20y%29.c3%20%E2%89%A4%20%28mcIn%20x%20y%29.c3.wt%20%2B%20%28aesRound%20k%20x%20%5E%5E%5E%20aesRound%20k%20y%29.c3.wt%20%3A%3D%20by%0A%20%20rw%20%5BaesRound_xor%2C%20mcIn%5D%0A%20%20generalize%20shiftRows%20%28subBytes%20x%29%20%3D%20p%0A%20%20generalize%20shiftRows%20%28subBytes%20y%29%20%3D%20q%0A%20%20obtain%20%E2%9F%A8p0%2C%20p1%2C%20p2%2C%20p3%E2%9F%A9%20%3A%3D%20p%0A%20%20obtain%20%E2%9F%A8q0%2C%20q1%2C%20q2%2C%20q3%E2%9F%A9%20%3A%3D%20q%0A%20%20simp%20only%20%5BmixColumns%2C%20State.mapCols%2C%20State.xor_def%5D%0A%20%20exact%20%E2%9F%A8branch_col%20p0%20q0%2C%20branch_col%20p1%20q1%2C%20branch_col%20p2%20q2%2C%20branch_col%20p3%20q3%E2%9F%A9%0A%0Atheorem%20wt_le_four_nzw%20%28w%20%3A%20Word%29%20%3A%20w.wt%20%E2%89%A4%204%20%2A%20nzw%20w%20%3A%3D%20by%0A%20%20have%20%3A%3D%20nz_le%20w.b0%3B%20have%20%3A%3D%20nz_le%20w.b1%3B%20have%20%3A%3D%20nz_le%20w.b2%3B%20have%20%3A%3D%20nz_le%20w.b3%0A%20%20unfold%20nzw%20Word.wt%20at%20%2A%3B%20split%20%3C%3B%3E%20omega%0A%0Atheorem%20nzw_pos%20%7Bw%20%3A%20Word%7D%20%28h%20%3A%200%20%3C%20w.wt%29%20%3A%20nzw%20w%20%3D%201%20%3A%3D%20by%20unfold%20nzw%3B%20split%20%3C%3B%3E%20omega%0A%0Atheorem%20State.wt_le_four_ac%20%28s%20%3A%20State%29%20%3A%20s.wt%20%E2%89%A4%204%20%2A%20s.ac%20%3A%3D%20by%0A%20%20have%20%3A%3D%20wt_le_four_nzw%20s.c0%3B%20have%20%3A%3D%20wt_le_four_nzw%20s.c1%0A%20%20have%20%3A%3D%20wt_le_four_nzw%20s.c2%3B%20have%20%3A%3D%20wt_le_four_nzw%20s.c3%0A%20%20unfold%20State.wt%20State.ac%3B%20omega%0A%0Atheorem%20State.ac_le_wt%20%28s%20%3A%20State%29%20%3A%20s.ac%20%E2%89%A4%20s.wt%20%3A%3D%20by%0A%20%20have%20%3A%3D%20nzw_le_wt%20s.c0%3B%20have%20%3A%3D%20nzw_le_wt%20s.c1%3B%20have%20%3A%3D%20nzw_le_wt%20s.c2%3B%20have%20%3A%3D%20nzw_le_wt%20s.c3%0A%20%20unfold%20State.wt%20State.ac%3B%20omega%0A%0Atheorem%20State.col_pos%20%7Bs%20%3A%20State%7D%20%28h%20%3A%200%20%3C%20s.wt%29%20%3A%0A%20%20%20%200%20%3C%20s.c0.wt%20%E2%88%A8%200%20%3C%20s.c1.wt%20%E2%88%A8%200%20%3C%20s.c2.wt%20%E2%88%A8%200%20%3C%20s.c3.wt%20%3A%3D%20by%0A%20%20unfold%20State.wt%20at%20h%3B%20omega%0A%0A%2F-%21%20%23%23%20Four%20rounds%20-%2F%0A%0A%2F--%20The%20counting%20at%20the%20heart%20of%20the%20four-round%20bound%2C%20over%20abstract%20differences%20%60D%E1%B5%A2%60%20%28round%20inputs%29%20and%0A%60M%E1%B5%A2%60%20%28what%20enters%20%60MixColumns%60%20in%20round%20%60i%20%2B%201%60%29.%20Kept%20apart%20from%20the%20cipher%20so%20that%20the%20arithmetic%0Anever%20has%20to%20look%20inside%20a%20round.%20-%2F%0Atheorem%20four_rounds_count%20%28D0%20D1%20D2%20D3%20M0%20M1%20M2%20%3A%20State%29%0A%20%20%20%20%28h01%20%3A%205%20%2A%20M0.ac%20%E2%89%A4%20D0.wt%20%2B%20D1.wt%29%20%28h23%20%3A%205%20%2A%20M2.ac%20%E2%89%A4%20D2.wt%20%2B%20D3.wt%29%0A%20%20%20%20%28hx%20%3A%200%20%3C%20D0.wt%29%20%28hw0%20%3A%20M0.wt%20%3D%20D0.wt%29%20%28hw1%20%3A%20M1.wt%20%3D%20D1.wt%29%20%28hac1%20%3A%20D1.ac%20%3D%20M0.ac%29%0A%20%20%20%20%28hle%20%3A%20M1.c0.wt%20%E2%89%A4%20D1.ac%20%E2%88%A7%20M1.c1.wt%20%E2%89%A4%20D1.ac%20%E2%88%A7%20M1.c2.wt%20%E2%89%A4%20D1.ac%20%E2%88%A7%20M1.c3.wt%20%E2%89%A4%20D1.ac%29%0A%20%20%20%20%28hbr%20%3A%205%20%2A%20nzw%20M1.c0%20%E2%89%A4%20M1.c0.wt%20%2B%20D2.c0.wt%20%E2%88%A7%205%20%2A%20nzw%20M1.c1%20%E2%89%A4%20M1.c1.wt%20%2B%20D2.c1.wt%20%E2%88%A7%0A%20%20%20%20%20%205%20%2A%20nzw%20M1.c2%20%E2%89%A4%20M1.c2.wt%20%2B%20D2.c2.wt%20%E2%88%A7%205%20%2A%20nzw%20M1.c3%20%E2%89%A4%20M1.c3.wt%20%2B%20D2.c3.wt%29%0A%20%20%20%20%28hge%20%3A%20D2.c0.wt%20%E2%89%A4%20M2.ac%20%E2%88%A7%20D2.c1.wt%20%E2%89%A4%20M2.ac%20%E2%88%A7%20D2.c2.wt%20%E2%89%A4%20M2.ac%20%E2%88%A7%20D2.c3.wt%20%E2%89%A4%20M2.ac%29%20%3A%0A%20%20%20%2025%20%E2%89%A4%20D0.wt%20%2B%20D1.wt%20%2B%20D2.wt%20%2B%20D3.wt%20%3A%3D%20by%0A%20%20--%20round%201%20has%20an%20active%20column%2C%20and%20so%20round%202%27s%20%60MixColumns%60%20input%20is%20nonzero%0A%20%20have%20a0%20%3A%200%20%3C%20M0.ac%20%3A%3D%20by%20have%20%3A%3D%20State.wt_le_four_ac%20M0%3B%20omega%0A%20%20have%20m1%20%3A%200%20%3C%20M1.wt%20%3A%3D%20by%20have%20%3A%3D%20State.ac_le_wt%20D1%3B%20omega%0A%20%20--%20in%20round%202%2C%20an%20active%20column%20carries%20at%20most%20%60M0.ac%60%20bytes%20in%20and%20at%20least%20%605%20-%20M0.ac%60%20out%0A%20%20have%20key%20%3A%205%20%E2%89%A4%20M0.ac%20%2B%20M2.ac%20%3A%3D%20by%0A%20%20%20%20rw%20%5B%E2%86%90%20hac1%5D%20at%20%2A%0A%20%20%20%20obtain%20%E2%9F%A8l0%2C%20l1%2C%20l2%2C%20l3%E2%9F%A9%20%3A%3D%20hle%0A%20%20%20%20obtain%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%20%3A%3D%20hbr%0A%20%20%20%20obtain%20%E2%9F%A8g0%2C%20g1%2C%20g2%2C%20g3%E2%9F%A9%20%3A%3D%20hge%0A%20%20%20%20rcases%20State.col_pos%20m1%20with%20p%20%7C%20p%20%7C%20p%20%7C%20p%0A%20%20%20%20%C2%B7%20rw%20%5Bnzw_pos%20p%5D%20at%20b0%3B%20omega%0A%20%20%20%20%C2%B7%20rw%20%5Bnzw_pos%20p%5D%20at%20b1%3B%20omega%0A%20%20%20%20%C2%B7%20rw%20%5Bnzw_pos%20p%5D%20at%20b2%3B%20omega%0A%20%20%20%20%C2%B7%20rw%20%5Bnzw_pos%20p%5D%20at%20b3%3B%20omega%0A%20%20omega%0A%0Atheorem%20wt_pos_of_ne%20%7Bx%20y%20%3A%20State%7D%20%28h%20%3A%20x%20%E2%89%A0%20y%29%20%3A%200%20%3C%20%28x%20%5E%5E%5E%20y%29.wt%20%3A%3D%20by%0A%20%20rcases%20Nat.eq_zero_or_pos%20%28x%20%5E%5E%5E%20y%29.wt%20with%20h0%20%7C%20h0%0A%20%20%C2%B7%20exfalso%3B%20apply%20h%0A%20%20%20%20obtain%20%E2%9F%A8%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%2C%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%2C%20%E2%9F%A8c0%2C%20c1%2C%20c2%2C%20c3%E2%9F%A9%2C%20%E2%9F%A8d0%2C%20d1%2C%20d2%2C%20d3%E2%9F%A9%E2%9F%A9%20%3A%3D%20x%0A%20%20%20%20obtain%20%E2%9F%A8%E2%9F%A8e0%2C%20e1%2C%20e2%2C%20e3%E2%9F%A9%2C%20%E2%9F%A8f0%2C%20f1%2C%20f2%2C%20f3%E2%9F%A9%2C%20%E2%9F%A8g0%2C%20g1%2C%20g2%2C%20g3%E2%9F%A9%2C%20%E2%9F%A8h0%27%2C%20h1%2C%20h2%2C%20h3%E2%9F%A9%E2%9F%A9%20%3A%3D%20y%0A%20%20%20%20simp%20only%20%5BState.wt%2C%20State.xor_def%2C%20Nat.add_eq_zero_iff%2C%20Word.wt_eq_zero%2C%20Word.xor_def%2C%0A%20%20%20%20%20%20Word.zero_def%2C%20Word.mk.injEq%2C%20UInt8.xor_eq_zero_iff%5D%20at%20h0%0A%20%20%20%20simp%20%5Bh0%5D%0A%20%20%C2%B7%20exact%20h0%0A%0A%2F--%20The%20wide-trail%20bound.%20Two%20different%20blocks%20%60x%20%E2%89%A0%20y%60%20go%20through%20four%20rounds%27%20worth%20of%20S-boxes%3A%0Athe%20inputs%20of%20rounds%201%20to%204%20are%20%60x%60%2C%20%60R%E2%82%81%20x%60%2C%20%60R%E2%82%82%20%28R%E2%82%81%20x%29%60%2C%20%60R%E2%82%83%20%28R%E2%82%82%20%28R%E2%82%81%20x%29%29%60%2C%20where%20%60R%E1%B5%A2%60%20is%20a%20full%20round%0Aunder%20any%20round%20key%20%60k%E1%B5%A2%60.%20Across%20those%20four%20layers%2C%20at%20least%2025%20S-boxes%20see%20different%20inputs.%20-%2F%0Atheorem%20four_rounds_active%20%28k1%20k2%20k3%20x%20y%20%3A%20State%29%20%28h%20%3A%20x%20%E2%89%A0%20y%29%20%3A%0A%20%20%20%2025%20%E2%89%A4%20active%20x%20y%20%2B%20active%20%28aesRound%20k1%20x%29%20%28aesRound%20k1%20y%29%20%2B%0A%20%20%20%20%20%20active%20%28aesRound%20k2%20%28aesRound%20k1%20x%29%29%20%28aesRound%20k2%20%28aesRound%20k1%20y%29%29%20%2B%0A%20%20%20%20%20%20active%20%28aesRound%20k3%20%28aesRound%20k2%20%28aesRound%20k1%20x%29%29%29%20%28aesRound%20k3%20%28aesRound%20k2%20%28aesRound%20k1%20y%29%29%29%20%3A%3D%0A%20%20four_rounds_count%20_%20_%20_%20_%20%28mcIn%20x%20y%29%20%28mcIn%20%28aesRound%20k1%20x%29%20%28aesRound%20k1%20y%29%29%0A%20%20%20%20%28mcIn%20%28aesRound%20k2%20%28aesRound%20k1%20x%29%29%20%28aesRound%20k2%20%28aesRound%20k1%20y%29%29%29%0A%20%20%20%20%28two_rounds%20k1%20x%20y%29%20%28two_rounds%20k3%20_%20_%29%20%28wt_pos_of_ne%20h%29%20%28wt_mcIn%20x%20y%29%20%28wt_mcIn%20_%20_%29%0A%20%20%20%20%28ac_aesRound_xor%20k1%20x%20y%29%20%28wt_mcIn_col_le%20_%20_%29%20%28branch_round_cols%20k2%20_%20_%29%20%28ac_mcIn_ge%20_%20_%29%0A%0A%2F--%20The%20same%2C%20for%20any%20four%20consecutive%20rounds%20of%20AES-256%20encryption%20under%20any%20key%20schedule.%20-%2F%0Atheorem%20cipherRounds_four_active%20%28rk%20%3A%20Nat%20%E2%86%92%20State%29%20%28r%20%3A%20Nat%29%20%28x%20y%20%3A%20State%29%20%28h%20%3A%20x%20%E2%89%A0%20y%29%20%3A%0A%20%20%20%2025%20%E2%89%A4%20active%20x%20y%20%2B%20active%20%28cipherRounds%20rk%201%20r%20x%29%20%28cipherRounds%20rk%201%20r%20y%29%20%2B%0A%20%20%20%20%20%20active%20%28cipherRounds%20rk%202%20r%20x%29%20%28cipherRounds%20rk%202%20r%20y%29%20%2B%0A%20%20%20%20%20%20active%20%28cipherRounds%20rk%203%20r%20x%29%20%28cipherRounds%20rk%203%20r%20y%29%20%3A%3D%0A%20%20four_rounds_active%20%28rk%20r%29%20%28rk%20%28r%20%2B%201%29%29%20%28rk%20%28r%20%2B%202%29%29%20x%20y%20h%0A%0Aend%20AES%0A">Run this file in the Lean 4 web editor ↗</a></p></header>
+<nav><strong>Proofs</strong> <a href="#p49">nzw_le</a> <a href="#p51">nz_le_nzw</a> <a href="#p58">nzw_le_wt</a> <a href="#p62">nz_sbox_xor</a> <a href="#p67">wt_map_sbox_xor</a> <a href="#p71">nzw_mixColumn_xor</a> <a href="#p81">branch_col</a> <a href="#p93">wt_mcIn</a> <a href="#p102">aesRound_xor</a> <a href="#p111">two_rounds</a> <a href="#p125">ac_aesRound_xor</a> <a href="#p135">wt_mcIn_col_le</a> <a href="#p149">ac_mcIn_ge</a> <a href="#p164">branch_round_cols</a> <a href="#p177">wt_le_four_nzw</a> <a href="#p181">nzw_pos</a> <a href="#p183">State.wt_le_four_ac</a> <a href="#p188">State.ac_le_wt</a> <a href="#p192">State.col_pos</a> <a href="#p201">four_rounds_count</a> <a href="#p225">wt_pos_of_ne</a></nav>
+<section class="proof" id="p49">
+<h2>nzw_le <span class="line">line 50</span></h2>
+<pre class="code">theorem nzw_le (w : Word) : nzw w ≤ 1 := by unfold nzw; split &lt;;&gt; omega</pre>
+<p class="words">In words: nzw w is at most 1</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ nzw w ≤ 1</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold nzw; split &lt;;&gt; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p51">
+<h2>nz_le_nzw <span class="line">line 52</span></h2>
+<pre class="code">theorem nz_le_nzw (a b c d : Byte) :
+    nz a ≤ nzw ⟨a, b, c, d⟩ ∧ nz b ≤ nzw ⟨a, b, c, d⟩ ∧ nz c ≤ nzw ⟨a, b, c, d⟩ ∧ nz d ≤ nzw ⟨a, b, c, d⟩ := by</pre>
+<p class="words">In words: nz a is at most nzw { b0 := a, b1 := b, b2 := c, b3 := d } and nz b is at most nzw { b0 := a, b1 := b, b2 := c, b3 := d } and nz c is at most nzw { b0 := a, b1 := b, b2 := c, b3 := d } and nz d is at most nzw { b0 := a, b1 := b, b2 := c, b3 := d }</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b c d : Byte
+⊢ nz a ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d } ∧
+  nz b ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d } ∧
+    nz c ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d } ∧ nz d ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d }</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le a; have := nz_le b; have := nz_le c; have := nz_le d</code><span class="change">+this✝&#178;  +this✝&#185;  +this✝  +this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a b c d : Byte
+this✝&#178; : nz a ≤ 1
+this✝&#185; : nz b ≤ 1
+this✝ : nz c ≤ 1
+this : nz d ≤ 1
+⊢ nz a ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d } ∧
+  nz b ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d } ∧
+    nz c ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d } ∧ nz d ≤ nzw { b0 := a, b1 := b, b2 := c, b3 := d }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [nzw, Word.wt]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">a b c d : Byte
+this✝&#178; : nz a ≤ 1
+this✝&#185; : nz b ≤ 1
+this✝ : nz c ≤ 1
+this : nz d ≤ 1
+⊢ (nz a ≤ if nz a + nz b + nz c + nz d = 0 then 0 else 1) ∧
+  (nz b ≤ if nz a + nz b + nz c + nz d = 0 then 0 else 1) ∧
+    (nz c ≤ if nz a + nz b + nz c + nz d = 0 then 0 else 1) ∧ nz d ≤ if nz a + nz b + nz c + nz d = 0 then 0 else 1</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>by_cases h : nz a + nz b + nz c + nz d = 0 &lt;;&gt; simp only [h, ↓reduceIte] &lt;;&gt;</code><span class="change">+1 goal  +h</span></div><p class="explain">Splits into two cases: the statement holds, or it does not.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>exact ⟨by omega, by omega, by omega, by omega⟩</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p58">
+<h2>nzw_le_wt <span class="line">line 59</span></h2>
+<pre class="code">theorem nzw_le_wt (w : Word) : nzw w ≤ w.wt := by unfold nzw; split &lt;;&gt; omega</pre>
+<p class="words">In words: nzw w is at most w.wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ nzw w ≤ w.wt</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold nzw; split &lt;;&gt; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p62">
+<h2>nz_sbox_xor <span class="line">line 63</span></h2>
+<pre class="code">theorem nz_sbox_xor (a b : Byte) : nz (sbox a ^^^ sbox b) = nz (a ^^^ b) := by</pre>
+<p class="words">In words: nz (sbox a ^^^ sbox b) equals nz (a ^^^ b)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Byte
+⊢ nz (sbox a ^^^ sbox b) = nz (a ^^^ b)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>unfold nz</code><span class="change">goal rewritten</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><pre class="goal">a b : Byte
+⊢ (if sbox a ^^^ sbox b = 0 then 0 else 1) = if a ^^^ b = 0 then 0 else 1</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have : sbox a = sbox b ↔ a = b := ⟨sbox_injective, fun h =&gt; h ▸ rfl⟩</code><span class="change">+this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a b : Byte
+this : sbox a = sbox b ↔ a = b
+⊢ (if sbox a ^^^ sbox b = 0 then 0 else 1) = if a ^^^ b = 0 then 0 else 1</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [UInt8.xor_eq_zero_iff, this]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p67">
+<h2>wt_map_sbox_xor <span class="line">line 68</span></h2>
+<pre class="code">theorem wt_map_sbox_xor (a b : Word) : (a.map sbox ^^^ b.map sbox).wt = (a ^^^ b).wt := by</pre>
+<p class="words">In words: (Word.map sbox a ^^^ Word.map sbox b).wt equals (a ^^^ b).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Word
+⊢ (Word.map sbox a ^^^ Word.map sbox b).wt = (a ^^^ b).wt</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [Word.wt, Word.map, Word.xor_def, nz_sbox_xor]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p71">
+<h2>nzw_mixColumn_xor <span class="line">line 72</span></h2>
+<pre class="code">theorem nzw_mixColumn_xor (a b : Word) : nzw (mixColumn a ^^^ mixColumn b) = nzw (a ^^^ b) := by</pre>
+<p class="words">In words: nzw (mixColumn a ^^^ mixColumn b) equals nzw (a ^^^ b)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Word
+⊢ nzw (mixColumn a ^^^ mixColumn b) = nzw (a ^^^ b)</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>rw [← mixColumn_xor]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">a b : Word
+⊢ nzw (mixColumn (a ^^^ b)) = nzw (a ^^^ b)</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>unfold nzw</code><span class="change">goal rewritten</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><pre class="goal">a b : Word
+⊢ (if (mixColumn (a ^^^ b)).wt = 0 then 0 else 1) = if (a ^^^ b).wt = 0 then 0 else 1</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have : mixColumn (a ^^^ b) = 0 ↔ a ^^^ b = 0 := by</code><span class="change">goal rewritten</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>constructor</code><span class="change">+1 goal</span></div><p class="explain">Splits a goal built from parts: &quot;p ∧ q&quot; becomes two goals, p and q; &quot;p ↔ q&quot; becomes both directions.</p><div class="state"><pre class="goal">case mp
+a b : Word
+⊢ mixColumn (a ^^^ b) = 0 → a ^^^ b = 0</pre><pre class="goal">case mpr
+a b : Word
+⊢ a ^^^ b = 0 → mixColumn (a ^^^ b) = 0</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; intro h; rw [← invMixColumn_mixColumn (a ^^^ b), h, invMixColumn_eq, Mat.apply_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Proves &quot;if … then …&quot; or &quot;for all …&quot; by assuming the premise: moves it from the goal into your hypotheses, under the name you give.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; intro h; rw [h, mixColumn_eq, Mat.apply_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Proves &quot;if … then …&quot; or &quot;for all …&quot; by assuming the premise: moves it from the goal into your hypotheses, under the name you give.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [Word.wt_eq_zero, this]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p81">
+<h2>branch_col <span class="line">line 82</span></h2>
+<pre class="code">theorem branch_col (a b : Word) : 5 * nzw (a ^^^ b) ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt := by</pre>
+<p class="words">In words: 5 * nzw (a ^^^ b) is at most (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Word
+⊢ 5 * nzw (a ^^^ b) ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>by_cases h : a = b</code><span class="change">+1 goal  +h</span></div><p class="explain">Splits into two cases: the statement holds, or it does not.</p><div class="state"><pre class="goal">case pos
+a b : Word
+h : a = b
+⊢ 5 * nzw (a ^^^ b) ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt</pre><pre class="goal">case neg
+a b : Word
+h : &#172;a = b
+⊢ 5 * nzw (a ^^^ b) ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; subst h; simp [nzw, Word.wt_eq_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Given h : x = e, replaces x by e everywhere and removes x.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; have := branch_mixColumn_diff h</code><span class="change">+this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nzw_le (a ^^^ b)</code><span class="change">+this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">case neg
+a b : Word
+h : &#172;a = b
+this✝ : 5 ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt
+this : nzw (a ^^^ b) ≤ 1
+⊢ 5 * nzw (a ^^^ b) ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p93">
+<h2>wt_mcIn <span class="line">line 94</span></h2>
+<pre class="code">theorem wt_mcIn (x y : State) : (mcIn x y).wt = (x ^^^ y).wt := by</pre>
+<p class="words">In words: (mcIn x y).wt equals (x ^^^ y).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x y : State
+⊢ (mcIn x y).wt = (x ^^^ y).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x</code><span class="change">+a0  +a1  +a2  +a3  +b0  +b1  +b2  +b3  +c0  +c1  +c2  +c3  +d0  +d1  +d2  +d3  −x</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">y : State
+a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 : Byte
+⊢ (mcIn
+      { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+      y).wt =
+  ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+      y).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0, h1, h2, h3⟩⟩ := y</code><span class="change">+e0  +e1  +e2  +e3  +f0  +f1  +f2  +f3  +g0  +g1  +g2  +g3  +h0  +h1  +h2  +h3  −y</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+⊢ (mcIn
+      { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+      { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+        c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).wt =
+  ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+      { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+        c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [mcIn, State.wt, Word.wt, shiftRows, subBytes, State.mapCols, Word.map, State.xor_def,</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>Word.xor_def, nz_sbox_xor]</code><span class="change">no change</span></div><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+⊢ nz (a0 ^^^ e0) + nz (b1 ^^^ f1) + nz (c2 ^^^ g2) + nz (d3 ^^^ h3) +
+        (nz (b0 ^^^ f0) + nz (c1 ^^^ g1) + nz (d2 ^^^ h2) + nz (a3 ^^^ e3)) +
+      (nz (c0 ^^^ g0) + nz (d1 ^^^ h1) + nz (a2 ^^^ e2) + nz (b3 ^^^ f3)) +
+    (nz (d0 ^^^ h0) + nz (a1 ^^^ e1) + nz (b2 ^^^ f2) + nz (c3 ^^^ g3)) =
+  nz (a0 ^^^ e0) + nz (a1 ^^^ e1) + nz (a2 ^^^ e2) + nz (a3 ^^^ e3) +
+        (nz (b0 ^^^ f0) + nz (b1 ^^^ f1) + nz (b2 ^^^ f2) + nz (b3 ^^^ f3)) +
+      (nz (c0 ^^^ g0) + nz (c1 ^^^ g1) + nz (c2 ^^^ g2) + nz (c3 ^^^ g3)) +
+    (nz (d0 ^^^ h0) + nz (d1 ^^^ h1) + nz (d2 ^^^ h2) + nz (d3 ^^^ h3))</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p102">
+<h2>aesRound_xor <span class="line">line 103</span></h2>
+<pre class="code">theorem aesRound_xor (k x y : State) :
+    aesRound k x ^^^ aesRound k y = mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y)) := by</pre>
+<p class="words">In words: aesRound k x ^^^ aesRound k y equals mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">k x y : State
+⊢ aesRound k x ^^^ aesRound k y = mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>unfold aesRound addRoundKey</code><span class="change">goal rewritten</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><pre class="goal">k x y : State
+⊢ mixColumns (shiftRows (subBytes x)) ^^^ k ^^^ (mixColumns (shiftRows (subBytes y)) ^^^ k) =
+  mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize mixColumns (shiftRows (subBytes x)) = p</code><span class="change">+p</span></div><div class="state"><pre class="goal">k x y p : State
+⊢ p ^^^ k ^^^ (mixColumns (shiftRows (subBytes y)) ^^^ k) = p ^^^ mixColumns (shiftRows (subBytes y))</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize mixColumns (shiftRows (subBytes y)) = q</code><span class="change">+q</span></div><div class="state"><pre class="goal">k x y p q : State
+⊢ p ^^^ k ^^^ (q ^^^ k) = p ^^^ q</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [State.xor_def, Word.xor_def, xor_xor_cancel]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p111">
+<h2>two_rounds <span class="line">line 112</span></h2>
+<pre class="code">theorem two_rounds (k x y : State) :
+    5 * (mcIn x y).ac ≤ (x ^^^ y).wt + (aesRound k x ^^^ aesRound k y).wt := by</pre>
+<p class="words">In words: 5 * (mcIn x y).ac is at most (x ^^^ y).wt + (aesRound k x ^^^ aesRound k y).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">k x y : State
+⊢ 5 * (mcIn x y).ac ≤ (x ^^^ y).wt + (aesRound k x ^^^ aesRound k y).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>rw [← wt_mcIn, aesRound_xor]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">k x y : State
+⊢ 5 * (mcIn x y).ac ≤ (mcIn x y).wt + (mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize hp : shiftRows (subBytes x) = p</code><span class="change">+p  +hp</span></div><div class="state"><pre class="goal">k x y p : State
+hp : shiftRows (subBytes x) = p
+⊢ 5 * (mcIn x y).ac ≤ (mcIn x y).wt + (mixColumns p ^^^ mixColumns (shiftRows (subBytes y))).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize hq : shiftRows (subBytes y) = q</code><span class="change">+q  +hq</span></div><div class="state"><pre class="goal">k x y p : State
+hp : shiftRows (subBytes x) = p
+q : State
+hq : shiftRows (subBytes y) = q
+⊢ 5 * (mcIn x y).ac ≤ (mcIn x y).wt + (mixColumns p ^^^ mixColumns q).wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>have hm : mcIn x y = p ^^^ q := by rw [mcIn, hp, hq]</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [hm]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">k x y p : State
+hp : shiftRows (subBytes x) = p
+q : State
+hq : shiftRows (subBytes y) = q
+hm : mcIn x y = p ^^^ q
+⊢ 5 * (p ^^^ q).ac ≤ (p ^^^ q).wt + (mixColumns p ^^^ mixColumns q).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨p0, p1, p2, p3⟩ := p</code><span class="change">+p0  +p1  +p2  +p3  −p  ~hp  ~hm</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">k x y q : State
+hq : shiftRows (subBytes y) = q
+p0 p1 p2 p3 : Word
+hp : shiftRows (subBytes x) = { c0 := p0, c1 := p1, c2 := p2, c3 := p3 }
+hm : mcIn x y = { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q
+⊢ 5 * ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).ac ≤
+  ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).wt +
+    (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns q).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨q0, q1, q2, q3⟩ := q</code><span class="change">+q0  +q1  +q2  +q3  −q  ~hq  ~hm</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">k x y : State
+p0 p1 p2 p3 : Word
+hp : shiftRows (subBytes x) = { c0 := p0, c1 := p1, c2 := p2, c3 := p3 }
+q0 q1 q2 q3 : Word
+hq : shiftRows (subBytes y) = { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }
+hm : mcIn x y = { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }
+⊢ 5 * ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).ac ≤
+  ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).wt +
+    (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := branch_col p0 q0; have := branch_col p1 q1; have := branch_col p2 q2; have := branch_col p3 q3</code><span class="change">+this✝&#178;  +this✝&#185;  +this✝  +this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">k x y : State
+p0 p1 p2 p3 : Word
+hp : shiftRows (subBytes x) = { c0 := p0, c1 := p1, c2 := p2, c3 := p3 }
+q0 q1 q2 q3 : Word
+hq : shiftRows (subBytes y) = { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }
+hm : mcIn x y = { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }
+this✝&#178; : 5 * nzw (p0 ^^^ q0) ≤ (p0 ^^^ q0).wt + (mixColumn p0 ^^^ mixColumn q0).wt
+this✝&#185; : 5 * nzw (p1 ^^^ q1) ≤ (p1 ^^^ q1).wt + (mixColumn p1 ^^^ mixColumn q1).wt
+this✝ : 5 * nzw (p2 ^^^ q2) ≤ (p2 ^^^ q2).wt + (mixColumn p2 ^^^ mixColumn q2).wt
+this : 5 * nzw (p3 ^^^ q3) ≤ (p3 ^^^ q3).wt + (mixColumn p3 ^^^ mixColumn q3).wt
+⊢ 5 * ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).ac ≤
+  ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).wt +
+    (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [State.ac, State.wt, mixColumns, State.mapCols, State.xor_def] at *</code><span class="change">~hm</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">k x y : State
+p0 p1 p2 p3 : Word
+hp : shiftRows (subBytes x) = { c0 := p0, c1 := p1, c2 := p2, c3 := p3 }
+q0 q1 q2 q3 : Word
+hq : shiftRows (subBytes y) = { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }
+hm : mcIn x y = { c0 := p0 ^^^ q0, c1 := p1 ^^^ q1, c2 := p2 ^^^ q2, c3 := p3 ^^^ q3 }
+this✝&#178; : 5 * nzw (p0 ^^^ q0) ≤ (p0 ^^^ q0).wt + (mixColumn p0 ^^^ mixColumn q0).wt
+this✝&#185; : 5 * nzw (p1 ^^^ q1) ≤ (p1 ^^^ q1).wt + (mixColumn p1 ^^^ mixColumn q1).wt
+this✝ : 5 * nzw (p2 ^^^ q2) ≤ (p2 ^^^ q2).wt + (mixColumn p2 ^^^ mixColumn q2).wt
+this : 5 * nzw (p3 ^^^ q3) ≤ (p3 ^^^ q3).wt + (mixColumn p3 ^^^ mixColumn q3).wt
+⊢ 5 * (nzw (p0 ^^^ q0) + nzw (p1 ^^^ q1) + nzw (p2 ^^^ q2) + nzw (p3 ^^^ q3)) ≤
+  (p0 ^^^ q0).wt + (p1 ^^^ q1).wt + (p2 ^^^ q2).wt + (p3 ^^^ q3).wt +
+    ((mixColumn p0 ^^^ mixColumn q0).wt + (mixColumn p1 ^^^ mixColumn q1).wt + (mixColumn p2 ^^^ mixColumn q2).wt +
+      (mixColumn p3 ^^^ mixColumn q3).wt)</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p125">
+<h2>ac_aesRound_xor <span class="line">line 126</span></h2>
+<pre class="code">theorem ac_aesRound_xor (k x y : State) : (aesRound k x ^^^ aesRound k y).ac = (mcIn x y).ac := by</pre>
+<p class="words">In words: (aesRound k x ^^^ aesRound k y).ac equals (mcIn x y).ac</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">k x y : State
+⊢ (aesRound k x ^^^ aesRound k y).ac = (mcIn x y).ac</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>rw [aesRound_xor, mcIn]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">k x y : State
+⊢ (mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))).ac =
+  (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize shiftRows (subBytes x) = p</code><span class="change">+p</span></div><div class="state"><pre class="goal">k x y p : State
+⊢ (mixColumns p ^^^ mixColumns (shiftRows (subBytes y))).ac = (p ^^^ shiftRows (subBytes y)).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize shiftRows (subBytes y) = q</code><span class="change">+q</span></div><div class="state"><pre class="goal">k x y p q : State
+⊢ (mixColumns p ^^^ mixColumns q).ac = (p ^^^ q).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨p0, p1, p2, p3⟩ := p</code><span class="change">+p0  +p1  +p2  +p3  −p</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">k x y q : State
+p0 p1 p2 p3 : Word
+⊢ (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns q).ac =
+  ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨q0, q1, q2, q3⟩ := q</code><span class="change">+q0  +q1  +q2  +q3  −q</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">k x y : State
+p0 p1 p2 p3 q0 q1 q2 q3 : Word
+⊢ (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).ac =
+  ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).ac</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [State.ac, mixColumns, State.mapCols, State.xor_def, nzw_mixColumn_xor]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p135">
+<h2>wt_mcIn_col_le <span class="line">line 136</span></h2>
+<pre class="code">theorem wt_mcIn_col_le (x y : State) :
+    (mcIn x y).c0.wt ≤ (x ^^^ y).ac ∧ (mcIn x y).c1.wt ≤ (x ^^^ y).ac ∧
+    (mcIn x y).c2.wt ≤ (x ^^^ y).ac ∧ (mcIn x y).c3.wt ≤ (x ^^^ y).ac := by</pre>
+<p class="words">In words: (mcIn x y).c0.wt is at most (x ^^^ y).ac and (mcIn x y).c1.wt is at most (x ^^^ y).ac and (mcIn x y).c2.wt is at most (x ^^^ y).ac and (mcIn x y).c3.wt is at most (x ^^^ y).ac</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x y : State
+⊢ (mcIn x y).c0.wt ≤ (x ^^^ y).ac ∧
+  (mcIn x y).c1.wt ≤ (x ^^^ y).ac ∧ (mcIn x y).c2.wt ≤ (x ^^^ y).ac ∧ (mcIn x y).c3.wt ≤ (x ^^^ y).ac</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x</code><span class="change">+a0  +a1  +a2  +a3  +b0  +b1  +b2  +b3  +c0  +c1  +c2  +c3  +d0  +d1  +d2  +d3  −x</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">y : State
+a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 : Byte
+⊢ (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          y).c0.wt ≤
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+        y).ac ∧
+  (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            y).c1.wt ≤
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          y).ac ∧
+    (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              y).c2.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            y).ac ∧
+      (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              y).c3.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            y).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0, h1, h2, h3⟩⟩ := y</code><span class="change">+e0  +e1  +e2  +e3  +f0  +f1  +f2  +f3  +g0  +g1  +g2  +g3  +h0  +h1  +h2  +h3  −y</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+⊢ (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+            c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c0.wt ≤
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+        { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+          c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+  (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+              c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c1.wt ≤
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+    (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c2.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+      (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c3.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (a0 ^^^ e0) (a1 ^^^ e1) (a2 ^^^ e2) (a3 ^^^ e3)</code><span class="change">+this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this : nz (a0 ^^^ e0) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+  nz (a1 ^^^ e1) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+    nz (a2 ^^^ e2) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+      nz (a3 ^^^ e3) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 }
+⊢ (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+            c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c0.wt ≤
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+        { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+          c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+  (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+              c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c1.wt ≤
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+    (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c2.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+      (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c3.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (b0 ^^^ f0) (b1 ^^^ f1) (b2 ^^^ f2) (b3 ^^^ f3)</code><span class="change">+this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝ : nz (a0 ^^^ e0) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+  nz (a1 ^^^ e1) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+    nz (a2 ^^^ e2) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+      nz (a3 ^^^ e3) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 }
+this : nz (b0 ^^^ f0) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+  nz (b1 ^^^ f1) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+    nz (b2 ^^^ f2) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+      nz (b3 ^^^ f3) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 }
+⊢ (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+            c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c0.wt ≤
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+        { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+          c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+  (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+              c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c1.wt ≤
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+    (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c2.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+      (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c3.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (c0 ^^^ g0) (c1 ^^^ g1) (c2 ^^^ g2) (c3 ^^^ g3)</code><span class="change">+this✝&#185;  ~this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝&#185; : nz (a0 ^^^ e0) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+  nz (a1 ^^^ e1) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+    nz (a2 ^^^ e2) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+      nz (a3 ^^^ e3) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 }
+this✝ : nz (b0 ^^^ f0) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+  nz (b1 ^^^ f1) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+    nz (b2 ^^^ f2) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+      nz (b3 ^^^ f3) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 }
+this : nz (c0 ^^^ g0) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+  nz (c1 ^^^ g1) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+    nz (c2 ^^^ g2) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+      nz (c3 ^^^ g3) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 }
+⊢ (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+            c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c0.wt ≤
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+        { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+          c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+  (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+              c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c1.wt ≤
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+    (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c2.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+      (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c3.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (d0 ^^^ h0) (d1 ^^^ h1) (d2 ^^^ h2) (d3 ^^^ h3)</code><span class="change">+this✝&#178;  ~this✝&#185;  ~this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝&#178; : nz (a0 ^^^ e0) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+  nz (a1 ^^^ e1) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+    nz (a2 ^^^ e2) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+      nz (a3 ^^^ e3) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 }
+this✝&#185; : nz (b0 ^^^ f0) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+  nz (b1 ^^^ f1) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+    nz (b2 ^^^ f2) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+      nz (b3 ^^^ f3) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 }
+this✝ : nz (c0 ^^^ g0) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+  nz (c1 ^^^ g1) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+    nz (c2 ^^^ g2) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+      nz (c3 ^^^ g3) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 }
+this : nz (d0 ^^^ h0) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+  nz (d1 ^^^ h1) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+    nz (d2 ^^^ h2) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+      nz (d3 ^^^ h3) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 }
+⊢ (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+            c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c0.wt ≤
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+        { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+          c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+  (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+              c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c1.wt ≤
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+    (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c2.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+      (mcIn
+              { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c3.wt ≤
+        ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [mcIn, State.ac, Word.wt, shiftRows, subBytes, State.mapCols, Word.map, State.xor_def,</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>Word.xor_def, nz_sbox_xor] at *</code><span class="change">no change</span></div><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝&#178; : nz (a0 ^^^ e0) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+  nz (a1 ^^^ e1) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+    nz (a2 ^^^ e2) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } ∧
+      nz (a3 ^^^ e3) ≤ nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 }
+this✝&#185; : nz (b0 ^^^ f0) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+  nz (b1 ^^^ f1) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+    nz (b2 ^^^ f2) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } ∧
+      nz (b3 ^^^ f3) ≤ nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 }
+this✝ : nz (c0 ^^^ g0) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+  nz (c1 ^^^ g1) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+    nz (c2 ^^^ g2) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } ∧
+      nz (c3 ^^^ g3) ≤ nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 }
+this : nz (d0 ^^^ h0) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+  nz (d1 ^^^ h1) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+    nz (d2 ^^^ h2) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+      nz (d3 ^^^ h3) ≤ nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 }
+⊢ nz (a0 ^^^ e0) + nz (b1 ^^^ f1) + nz (c2 ^^^ g2) + nz (d3 ^^^ h3) ≤
+    nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } +
+          nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } +
+        nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } +
+      nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+  nz (b0 ^^^ f0) + nz (c1 ^^^ g1) + nz (d2 ^^^ h2) + nz (a3 ^^^ e3) ≤
+      nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } +
+            nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } +
+          nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } +
+        nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+    nz (c0 ^^^ g0) + nz (d1 ^^^ h1) + nz (a2 ^^^ e2) + nz (b3 ^^^ f3) ≤
+        nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } +
+              nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } +
+            nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } +
+          nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 } ∧
+      nz (d0 ^^^ h0) + nz (a1 ^^^ e1) + nz (b2 ^^^ f2) + nz (c3 ^^^ g3) ≤
+        nzw { b0 := a0 ^^^ e0, b1 := a1 ^^^ e1, b2 := a2 ^^^ e2, b3 := a3 ^^^ e3 } +
+              nzw { b0 := b0 ^^^ f0, b1 := b1 ^^^ f1, b2 := b2 ^^^ f2, b3 := b3 ^^^ f3 } +
+            nzw { b0 := c0 ^^^ g0, b1 := c1 ^^^ g1, b2 := c2 ^^^ g2, b3 := c3 ^^^ g3 } +
+          nzw { b0 := d0 ^^^ h0, b1 := d1 ^^^ h1, b2 := d2 ^^^ h2, b3 := d3 ^^^ h3 }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p149">
+<h2>ac_mcIn_ge <span class="line">line 150</span></h2>
+<pre class="code">theorem ac_mcIn_ge (x y : State) :
+    (x ^^^ y).c0.wt ≤ (mcIn x y).ac ∧ (x ^^^ y).c1.wt ≤ (mcIn x y).ac ∧
+    (x ^^^ y).c2.wt ≤ (mcIn x y).ac ∧ (x ^^^ y).c3.wt ≤ (mcIn x y).ac := by</pre>
+<p class="words">In words: (x ^^^ y).c0.wt is at most (mcIn x y).ac and (x ^^^ y).c1.wt is at most (mcIn x y).ac and (x ^^^ y).c2.wt is at most (mcIn x y).ac and (x ^^^ y).c3.wt is at most (mcIn x y).ac</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x y : State
+⊢ (x ^^^ y).c0.wt ≤ (mcIn x y).ac ∧
+  (x ^^^ y).c1.wt ≤ (mcIn x y).ac ∧ (x ^^^ y).c2.wt ≤ (mcIn x y).ac ∧ (x ^^^ y).c3.wt ≤ (mcIn x y).ac</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x</code><span class="change">+a0  +a1  +a2  +a3  +b0  +b1  +b2  +b3  +c0  +c1  +c2  +c3  +d0  +d1  +d2  +d3  −x</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">y : State
+a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 : Byte
+⊢ ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          y).c0.wt ≤
+    (mcIn
+        { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+        y).ac ∧
+  ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            y).c1.wt ≤
+      (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          y).ac ∧
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+              y).c2.wt ≤
+        (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            y).ac ∧
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+              y).c3.wt ≤
+        (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            y).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0, h1, h2, h3⟩⟩ := y</code><span class="change">+e0  +e1  +e2  +e3  +f0  +f1  +f2  +f3  +g0  +g1  +g2  +g3  +h0  +h1  +h2  +h3  −y</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+⊢ ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+            c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c0.wt ≤
+    (mcIn
+        { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+          c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+        { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+          c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+  ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+              c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c1.wt ≤
+      (mcIn
+          { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+            c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+          { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+            c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+    ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c2.wt ≤
+        (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac ∧
+      ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+                c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+              { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+                c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 },
+                c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).c3.wt ≤
+        (mcIn
+            { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+              c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } }
+            { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+              c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0, b1 := h1, b2 := h2, b3 := h3 } }).ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [mcIn, State.ac, Word.wt, shiftRows, subBytes, State.mapCols, Word.map, State.xor_def,</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>Word.xor_def]</code><span class="change">no change</span></div><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+⊢ nz (a0 ^^^ e0) + nz (a1 ^^^ e1) + nz (a2 ^^^ e2) + nz (a3 ^^^ e3) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } +
+          nzw
+            { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+              b3 := sbox a3 ^^^ sbox e3 } +
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } +
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (b0 ^^^ f0) + nz (b1 ^^^ f1) + nz (b2 ^^^ f2) + nz (b3 ^^^ f3) ≤
+      nzw
+              { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                b3 := sbox d3 ^^^ sbox h3 } +
+            nzw
+              { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                b3 := sbox a3 ^^^ sbox e3 } +
+          nzw
+            { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+              b3 := sbox b3 ^^^ sbox f3 } +
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (c0 ^^^ g0) + nz (c1 ^^^ g1) + nz (c2 ^^^ g2) + nz (c3 ^^^ g3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (d0 ^^^ h0) + nz (d1 ^^^ h1) + nz (d2 ^^^ h2) + nz (d3 ^^^ h3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (sbox a0 ^^^ sbox e0) (sbox b1 ^^^ sbox f1) (sbox c2 ^^^ sbox g2) (sbox d3 ^^^ sbox h3)</code><span class="change">+this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this : nz (sbox a0 ^^^ sbox e0) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+  nz (sbox b1 ^^^ sbox f1) ≤
+      nzw
+        { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+    nz (sbox c2 ^^^ sbox g2) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+            b3 := sbox d3 ^^^ sbox h3 } ∧
+      nz (sbox d3 ^^^ sbox h3) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 }
+⊢ nz (a0 ^^^ e0) + nz (a1 ^^^ e1) + nz (a2 ^^^ e2) + nz (a3 ^^^ e3) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } +
+          nzw
+            { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+              b3 := sbox a3 ^^^ sbox e3 } +
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } +
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (b0 ^^^ f0) + nz (b1 ^^^ f1) + nz (b2 ^^^ f2) + nz (b3 ^^^ f3) ≤
+      nzw
+              { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                b3 := sbox d3 ^^^ sbox h3 } +
+            nzw
+              { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                b3 := sbox a3 ^^^ sbox e3 } +
+          nzw
+            { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+              b3 := sbox b3 ^^^ sbox f3 } +
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (c0 ^^^ g0) + nz (c1 ^^^ g1) + nz (c2 ^^^ g2) + nz (c3 ^^^ g3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (d0 ^^^ h0) + nz (d1 ^^^ h1) + nz (d2 ^^^ h2) + nz (d3 ^^^ h3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (sbox b0 ^^^ sbox f0) (sbox c1 ^^^ sbox g1) (sbox d2 ^^^ sbox h2) (sbox a3 ^^^ sbox e3)</code><span class="change">+this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝ : nz (sbox a0 ^^^ sbox e0) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+  nz (sbox b1 ^^^ sbox f1) ≤
+      nzw
+        { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+    nz (sbox c2 ^^^ sbox g2) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+            b3 := sbox d3 ^^^ sbox h3 } ∧
+      nz (sbox d3 ^^^ sbox h3) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 }
+this : nz (sbox b0 ^^^ sbox f0) ≤
+    nzw { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+  nz (sbox c1 ^^^ sbox g1) ≤
+      nzw
+        { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+    nz (sbox d2 ^^^ sbox h2) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+            b3 := sbox a3 ^^^ sbox e3 } ∧
+      nz (sbox a3 ^^^ sbox e3) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 }
+⊢ nz (a0 ^^^ e0) + nz (a1 ^^^ e1) + nz (a2 ^^^ e2) + nz (a3 ^^^ e3) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } +
+          nzw
+            { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+              b3 := sbox a3 ^^^ sbox e3 } +
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } +
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (b0 ^^^ f0) + nz (b1 ^^^ f1) + nz (b2 ^^^ f2) + nz (b3 ^^^ f3) ≤
+      nzw
+              { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                b3 := sbox d3 ^^^ sbox h3 } +
+            nzw
+              { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                b3 := sbox a3 ^^^ sbox e3 } +
+          nzw
+            { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+              b3 := sbox b3 ^^^ sbox f3 } +
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (c0 ^^^ g0) + nz (c1 ^^^ g1) + nz (c2 ^^^ g2) + nz (c3 ^^^ g3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (d0 ^^^ h0) + nz (d1 ^^^ h1) + nz (d2 ^^^ h2) + nz (d3 ^^^ h3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (sbox c0 ^^^ sbox g0) (sbox d1 ^^^ sbox h1) (sbox a2 ^^^ sbox e2) (sbox b3 ^^^ sbox f3)</code><span class="change">+this✝&#185;  ~this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝&#185; : nz (sbox a0 ^^^ sbox e0) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+  nz (sbox b1 ^^^ sbox f1) ≤
+      nzw
+        { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+    nz (sbox c2 ^^^ sbox g2) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+            b3 := sbox d3 ^^^ sbox h3 } ∧
+      nz (sbox d3 ^^^ sbox h3) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 }
+this✝ : nz (sbox b0 ^^^ sbox f0) ≤
+    nzw { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+  nz (sbox c1 ^^^ sbox g1) ≤
+      nzw
+        { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+    nz (sbox d2 ^^^ sbox h2) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+            b3 := sbox a3 ^^^ sbox e3 } ∧
+      nz (sbox a3 ^^^ sbox e3) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 }
+this : nz (sbox c0 ^^^ sbox g0) ≤
+    nzw { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 } ∧
+  nz (sbox d1 ^^^ sbox h1) ≤
+      nzw
+        { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 } ∧
+    nz (sbox a2 ^^^ sbox e2) ≤
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } ∧
+      nz (sbox b3 ^^^ sbox f3) ≤
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 }
+⊢ nz (a0 ^^^ e0) + nz (a1 ^^^ e1) + nz (a2 ^^^ e2) + nz (a3 ^^^ e3) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } +
+          nzw
+            { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+              b3 := sbox a3 ^^^ sbox e3 } +
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } +
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (b0 ^^^ f0) + nz (b1 ^^^ f1) + nz (b2 ^^^ f2) + nz (b3 ^^^ f3) ≤
+      nzw
+              { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                b3 := sbox d3 ^^^ sbox h3 } +
+            nzw
+              { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                b3 := sbox a3 ^^^ sbox e3 } +
+          nzw
+            { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+              b3 := sbox b3 ^^^ sbox f3 } +
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (c0 ^^^ g0) + nz (c1 ^^^ g1) + nz (c2 ^^^ g2) + nz (c3 ^^^ g3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (d0 ^^^ h0) + nz (d1 ^^^ h1) + nz (d2 ^^^ h2) + nz (d3 ^^^ h3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le_nzw (sbox d0 ^^^ sbox h0) (sbox a1 ^^^ sbox e1) (sbox b2 ^^^ sbox f2) (sbox c3 ^^^ sbox g3)</code><span class="change">+this✝&#178;  ~this✝&#185;  ~this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝&#178; : nz (sbox a0 ^^^ sbox e0) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+  nz (sbox b1 ^^^ sbox f1) ≤
+      nzw
+        { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+    nz (sbox c2 ^^^ sbox g2) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+            b3 := sbox d3 ^^^ sbox h3 } ∧
+      nz (sbox d3 ^^^ sbox h3) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 }
+this✝&#185; : nz (sbox b0 ^^^ sbox f0) ≤
+    nzw { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+  nz (sbox c1 ^^^ sbox g1) ≤
+      nzw
+        { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+    nz (sbox d2 ^^^ sbox h2) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+            b3 := sbox a3 ^^^ sbox e3 } ∧
+      nz (sbox a3 ^^^ sbox e3) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 }
+this✝ : nz (sbox c0 ^^^ sbox g0) ≤
+    nzw { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 } ∧
+  nz (sbox d1 ^^^ sbox h1) ≤
+      nzw
+        { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 } ∧
+    nz (sbox a2 ^^^ sbox e2) ≤
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } ∧
+      nz (sbox b3 ^^^ sbox f3) ≤
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 }
+this : nz (sbox d0 ^^^ sbox h0) ≤
+    nzw { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (sbox a1 ^^^ sbox e1) ≤
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (sbox b2 ^^^ sbox f2) ≤
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (sbox c3 ^^^ sbox g3) ≤
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 }
+⊢ nz (a0 ^^^ e0) + nz (a1 ^^^ e1) + nz (a2 ^^^ e2) + nz (a3 ^^^ e3) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } +
+          nzw
+            { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+              b3 := sbox a3 ^^^ sbox e3 } +
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } +
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (b0 ^^^ f0) + nz (b1 ^^^ f1) + nz (b2 ^^^ f2) + nz (b3 ^^^ f3) ≤
+      nzw
+              { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                b3 := sbox d3 ^^^ sbox h3 } +
+            nzw
+              { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                b3 := sbox a3 ^^^ sbox e3 } +
+          nzw
+            { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+              b3 := sbox b3 ^^^ sbox f3 } +
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (c0 ^^^ g0) + nz (c1 ^^^ g1) + nz (c2 ^^^ g2) + nz (c3 ^^^ g3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (d0 ^^^ h0) + nz (d1 ^^^ h1) + nz (d2 ^^^ h2) + nz (d3 ^^^ h3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [nz_sbox_xor] at *</code><span class="change">~this✝&#178;  ~this✝&#185;  ~this✝  ~this</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0 h1 h2 h3 : Byte
+this✝&#178; : nz (a0 ^^^ e0) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+  nz (b1 ^^^ f1) ≤
+      nzw
+        { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } ∧
+    nz (c2 ^^^ g2) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+            b3 := sbox d3 ^^^ sbox h3 } ∧
+      nz (d3 ^^^ h3) ≤
+        nzw
+          { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 }
+this✝&#185; : nz (b0 ^^^ f0) ≤
+    nzw { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+  nz (c1 ^^^ g1) ≤
+      nzw
+        { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 } ∧
+    nz (d2 ^^^ h2) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+            b3 := sbox a3 ^^^ sbox e3 } ∧
+      nz (a3 ^^^ e3) ≤
+        nzw
+          { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2, b3 := sbox a3 ^^^ sbox e3 }
+this✝ : nz (c0 ^^^ g0) ≤
+    nzw { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 } ∧
+  nz (d1 ^^^ h1) ≤
+      nzw
+        { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 } ∧
+    nz (a2 ^^^ e2) ≤
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } ∧
+      nz (b3 ^^^ f3) ≤
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2, b3 := sbox b3 ^^^ sbox f3 }
+this : nz (d0 ^^^ h0) ≤
+    nzw { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (a1 ^^^ e1) ≤
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (b2 ^^^ f2) ≤
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (c3 ^^^ g3) ≤
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 }
+⊢ nz (a0 ^^^ e0) + nz (a1 ^^^ e1) + nz (a2 ^^^ e2) + nz (a3 ^^^ e3) ≤
+    nzw { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2, b3 := sbox d3 ^^^ sbox h3 } +
+          nzw
+            { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+              b3 := sbox a3 ^^^ sbox e3 } +
+        nzw
+          { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+            b3 := sbox b3 ^^^ sbox f3 } +
+      nzw
+        { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2, b3 := sbox c3 ^^^ sbox g3 } ∧
+  nz (b0 ^^^ f0) + nz (b1 ^^^ f1) + nz (b2 ^^^ f2) + nz (b3 ^^^ f3) ≤
+      nzw
+              { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                b3 := sbox d3 ^^^ sbox h3 } +
+            nzw
+              { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                b3 := sbox a3 ^^^ sbox e3 } +
+          nzw
+            { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+              b3 := sbox b3 ^^^ sbox f3 } +
+        nzw
+          { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+            b3 := sbox c3 ^^^ sbox g3 } ∧
+    nz (c0 ^^^ g0) + nz (c1 ^^^ g1) + nz (c2 ^^^ g2) + nz (c3 ^^^ g3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 } ∧
+      nz (d0 ^^^ h0) + nz (d1 ^^^ h1) + nz (d2 ^^^ h2) + nz (d3 ^^^ h3) ≤
+        nzw
+                { b0 := sbox a0 ^^^ sbox e0, b1 := sbox b1 ^^^ sbox f1, b2 := sbox c2 ^^^ sbox g2,
+                  b3 := sbox d3 ^^^ sbox h3 } +
+              nzw
+                { b0 := sbox b0 ^^^ sbox f0, b1 := sbox c1 ^^^ sbox g1, b2 := sbox d2 ^^^ sbox h2,
+                  b3 := sbox a3 ^^^ sbox e3 } +
+            nzw
+              { b0 := sbox c0 ^^^ sbox g0, b1 := sbox d1 ^^^ sbox h1, b2 := sbox a2 ^^^ sbox e2,
+                b3 := sbox b3 ^^^ sbox f3 } +
+          nzw
+            { b0 := sbox d0 ^^^ sbox h0, b1 := sbox a1 ^^^ sbox e1, b2 := sbox b2 ^^^ sbox f2,
+              b3 := sbox c3 ^^^ sbox g3 }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p164">
+<h2>branch_round_cols <span class="line">line 165</span></h2>
+<pre class="code">theorem branch_round_cols (k x y : State) :
+    5 * nzw (mcIn x y).c0 ≤ (mcIn x y).c0.wt + (aesRound k x ^^^ aesRound k y).c0.wt ∧
+    5 * nzw (mcIn x y).c1 ≤ (mcIn x y).c1.wt + (aesRound k x ^^^ aesRound k y).c1.wt ∧
+    5 * nzw (mcIn x y).c2 ≤ (mcIn x y).c2.wt + (aesRound k x ^^^ aesRound k y).c2.wt ∧
+    5 * nzw (mcIn x y).c3 ≤ (mcIn x y).c3.wt + (aesRound k x ^^^ aesRound k y).c3.wt := by</pre>
+<p class="words">In words: 5 * nzw (mcIn x y).c0 is at most (mcIn x y).c0.wt + (aesRound k x ^^^ aesRound k y).c0.wt and 5 * nzw (mcIn x y).c1 is at most (mcIn x y).c1.wt + (aesRound k x ^^^ aesRound k y).c1.wt and 5 * nzw (mcIn x y).c2 is at most (mcIn x y).c2.wt + (aesRound k x ^^^ aesRound k y).c2.wt and 5 * nzw (mcIn x y).c3 is at most (mcIn x y).c3.wt + (aesRound k x ^^^ aesRound k y).c3.wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">k x y : State
+⊢ 5 * nzw (mcIn x y).c0 ≤ (mcIn x y).c0.wt + (aesRound k x ^^^ aesRound k y).c0.wt ∧
+  5 * nzw (mcIn x y).c1 ≤ (mcIn x y).c1.wt + (aesRound k x ^^^ aesRound k y).c1.wt ∧
+    5 * nzw (mcIn x y).c2 ≤ (mcIn x y).c2.wt + (aesRound k x ^^^ aesRound k y).c2.wt ∧
+      5 * nzw (mcIn x y).c3 ≤ (mcIn x y).c3.wt + (aesRound k x ^^^ aesRound k y).c3.wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>rw [aesRound_xor, mcIn]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">k x y : State
+⊢ 5 * nzw (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c0 ≤
+    (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c0.wt +
+      (mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))).c0.wt ∧
+  5 * nzw (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c1 ≤
+      (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c1.wt +
+        (mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))).c1.wt ∧
+    5 * nzw (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c2 ≤
+        (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c2.wt +
+          (mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))).c2.wt ∧
+      5 * nzw (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c3 ≤
+        (shiftRows (subBytes x) ^^^ shiftRows (subBytes y)).c3.wt +
+          (mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y))).c3.wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize shiftRows (subBytes x) = p</code><span class="change">+p</span></div><div class="state"><pre class="goal">k x y p : State
+⊢ 5 * nzw (p ^^^ shiftRows (subBytes y)).c0 ≤
+    (p ^^^ shiftRows (subBytes y)).c0.wt + (mixColumns p ^^^ mixColumns (shiftRows (subBytes y))).c0.wt ∧
+  5 * nzw (p ^^^ shiftRows (subBytes y)).c1 ≤
+      (p ^^^ shiftRows (subBytes y)).c1.wt + (mixColumns p ^^^ mixColumns (shiftRows (subBytes y))).c1.wt ∧
+    5 * nzw (p ^^^ shiftRows (subBytes y)).c2 ≤
+        (p ^^^ shiftRows (subBytes y)).c2.wt + (mixColumns p ^^^ mixColumns (shiftRows (subBytes y))).c2.wt ∧
+      5 * nzw (p ^^^ shiftRows (subBytes y)).c3 ≤
+        (p ^^^ shiftRows (subBytes y)).c3.wt + (mixColumns p ^^^ mixColumns (shiftRows (subBytes y))).c3.wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>generalize shiftRows (subBytes y) = q</code><span class="change">+q</span></div><div class="state"><pre class="goal">k x y p q : State
+⊢ 5 * nzw (p ^^^ q).c0 ≤ (p ^^^ q).c0.wt + (mixColumns p ^^^ mixColumns q).c0.wt ∧
+  5 * nzw (p ^^^ q).c1 ≤ (p ^^^ q).c1.wt + (mixColumns p ^^^ mixColumns q).c1.wt ∧
+    5 * nzw (p ^^^ q).c2 ≤ (p ^^^ q).c2.wt + (mixColumns p ^^^ mixColumns q).c2.wt ∧
+      5 * nzw (p ^^^ q).c3 ≤ (p ^^^ q).c3.wt + (mixColumns p ^^^ mixColumns q).c3.wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨p0, p1, p2, p3⟩ := p</code><span class="change">+p0  +p1  +p2  +p3  −p</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">k x y q : State
+p0 p1 p2 p3 : Word
+⊢ 5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c0 ≤
+    ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c0.wt +
+      (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns q).c0.wt ∧
+  5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c1 ≤
+      ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c1.wt +
+        (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns q).c1.wt ∧
+    5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c2 ≤
+        ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c2.wt +
+          (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns q).c2.wt ∧
+      5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c3 ≤
+        ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ q).c3.wt +
+          (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ mixColumns q).c3.wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨q0, q1, q2, q3⟩ := q</code><span class="change">+q0  +q1  +q2  +q3  −q</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">k x y : State
+p0 p1 p2 p3 q0 q1 q2 q3 : Word
+⊢ 5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c0 ≤
+    ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c0.wt +
+      (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^
+            mixColumns { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c0.wt ∧
+  5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c1 ≤
+      ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c1.wt +
+        (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^
+              mixColumns { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c1.wt ∧
+    5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c2 ≤
+        ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c2.wt +
+          (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^
+                mixColumns { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c2.wt ∧
+      5 * nzw ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c3 ≤
+        ({ c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^ { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c3.wt +
+          (mixColumns { c0 := p0, c1 := p1, c2 := p2, c3 := p3 } ^^^
+                mixColumns { c0 := q0, c1 := q1, c2 := q2, c3 := q3 }).c3.wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [mixColumns, State.mapCols, State.xor_def]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">k x y : State
+p0 p1 p2 p3 q0 q1 q2 q3 : Word
+⊢ 5 * nzw (p0 ^^^ q0) ≤ (p0 ^^^ q0).wt + (mixColumn p0 ^^^ mixColumn q0).wt ∧
+  5 * nzw (p1 ^^^ q1) ≤ (p1 ^^^ q1).wt + (mixColumn p1 ^^^ mixColumn q1).wt ∧
+    5 * nzw (p2 ^^^ q2) ≤ (p2 ^^^ q2).wt + (mixColumn p2 ^^^ mixColumn q2).wt ∧
+      5 * nzw (p3 ^^^ q3) ≤ (p3 ^^^ q3).wt + (mixColumn p3 ^^^ mixColumn q3).wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>exact ⟨branch_col p0 q0, branch_col p1 q1, branch_col p2 q2, branch_col p3 q3⟩</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p177">
+<h2>wt_le_four_nzw <span class="line">line 178</span></h2>
+<pre class="code">theorem wt_le_four_nzw (w : Word) : w.wt ≤ 4 * nzw w := by</pre>
+<p class="words">In words: w.wt is at most 4 * nzw w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ w.wt ≤ 4 * nzw w</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le w.b0; have := nz_le w.b1; have := nz_le w.b2; have := nz_le w.b3</code><span class="change">+this✝&#178;  +this✝&#185;  +this✝  +this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">w : Word
+this✝&#178; : nz w.b0 ≤ 1
+this✝&#185; : nz w.b1 ≤ 1
+this✝ : nz w.b2 ≤ 1
+this : nz w.b3 ≤ 1
+⊢ w.wt ≤ 4 * nzw w</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold nzw Word.wt at *; split &lt;;&gt; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p181">
+<h2>nzw_pos <span class="line">line 182</span></h2>
+<pre class="code">theorem nzw_pos {w : Word} (h : 0 &lt; w.wt) : nzw w = 1 := by unfold nzw; split &lt;;&gt; omega</pre>
+<p class="words">In words: nzw w equals 1</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+h : 0 &lt; w.wt
+⊢ nzw w = 1</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold nzw; split &lt;;&gt; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p183">
+<h2>State.wt_le_four_ac <span class="line">line 184</span></h2>
+<pre class="code">theorem State.wt_le_four_ac (s : State) : s.wt ≤ 4 * s.ac := by</pre>
+<p class="words">In words: s.wt is at most 4 * s.ac</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s : State
+⊢ s.wt ≤ 4 * s.ac</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>have := wt_le_four_nzw s.c0; have := wt_le_four_nzw s.c1</code><span class="change">+this✝  +this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">s : State
+this✝ : s.c0.wt ≤ 4 * nzw s.c0
+this : s.c1.wt ≤ 4 * nzw s.c1
+⊢ s.wt ≤ 4 * s.ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := wt_le_four_nzw s.c2; have := wt_le_four_nzw s.c3</code><span class="change">+this✝&#178;  +this✝&#185;  ~this✝  ~this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">s : State
+this✝&#178; : s.c0.wt ≤ 4 * nzw s.c0
+this✝&#185; : s.c1.wt ≤ 4 * nzw s.c1
+this✝ : s.c2.wt ≤ 4 * nzw s.c2
+this : s.c3.wt ≤ 4 * nzw s.c3
+⊢ s.wt ≤ 4 * s.ac</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold State.wt State.ac; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p188">
+<h2>State.ac_le_wt <span class="line">line 189</span></h2>
+<pre class="code">theorem State.ac_le_wt (s : State) : s.ac ≤ s.wt := by</pre>
+<p class="words">In words: s.ac is at most s.wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s : State
+⊢ s.ac ≤ s.wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>have := nzw_le_wt s.c0; have := nzw_le_wt s.c1; have := nzw_le_wt s.c2; have := nzw_le_wt s.c3</code><span class="change">+this✝&#178;  +this✝&#185;  +this✝  +this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">s : State
+this✝&#178; : nzw s.c0 ≤ s.c0.wt
+this✝&#185; : nzw s.c1 ≤ s.c1.wt
+this✝ : nzw s.c2 ≤ s.c2.wt
+this : nzw s.c3 ≤ s.c3.wt
+⊢ s.ac ≤ s.wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold State.wt State.ac; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p192">
+<h2>State.col_pos <span class="line">line 193</span></h2>
+<pre class="code">theorem State.col_pos {s : State} (h : 0 &lt; s.wt) :
+    0 &lt; s.c0.wt ∨ 0 &lt; s.c1.wt ∨ 0 &lt; s.c2.wt ∨ 0 &lt; s.c3.wt := by</pre>
+<p class="words">In words: 0 is less than s.c0.wt or 0 is less than s.c1.wt or 0 is less than s.c2.wt or 0 is less than s.c3.wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">s : State
+h : 0 &lt; s.wt
+⊢ 0 &lt; s.c0.wt ∨ 0 &lt; s.c1.wt ∨ 0 &lt; s.c2.wt ∨ 0 &lt; s.c3.wt</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold State.wt at h; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p201">
+<h2>four_rounds_count <span class="line">line 202</span></h2>
+<pre class="code">theorem four_rounds_count (D0 D1 D2 D3 M0 M1 M2 : State)
+    (h01 : 5 * M0.ac ≤ D0.wt + D1.wt) (h23 : 5 * M2.ac ≤ D2.wt + D3.wt)
+    (hx : 0 &lt; D0.wt) (hw0 : M0.wt = D0.wt) (hw1 : M1.wt = D1.wt) (hac1 : D1.ac = M0.ac)
+    (hle : M1.c0.wt ≤ D1.ac ∧ M1.c1.wt ≤ D1.ac ∧ M1.c2.wt ≤ D1.ac ∧ M1.c3.wt ≤ D1.ac)
+    (hbr : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt ∧ 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt ∧
+      5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt ∧ 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt)
+    (hge : D2.c0.wt ≤ M2.ac ∧ D2.c1.wt ≤ M2.ac ∧ D2.c2.wt ≤ M2.ac ∧ D2.c3.wt ≤ M2.ac) :
+    25 ≤ D0.wt + D1.wt + D2.wt + D3.wt := by</pre>
+<p class="words">In words: 25 is at most D0.wt + D1.wt + D2.wt + D3.wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = M0.ac
+hle : M1.c0.wt ≤ D1.ac ∧ M1.c1.wt ≤ D1.ac ∧ M1.c2.wt ≤ D1.ac ∧ M1.c3.wt ≤ D1.ac
+hbr : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt ∧
+  5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt ∧ 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt ∧ 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+hge : D2.c0.wt ≤ M2.ac ∧ D2.c1.wt ≤ M2.ac ∧ D2.c2.wt ≤ M2.ac ∧ D2.c3.wt ≤ M2.ac
+⊢ 25 ≤ D0.wt + D1.wt + D2.wt + D3.wt</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>have a0 : 0 &lt; M0.ac := by have := State.wt_le_four_ac M0; omega</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>have m1 : 0 &lt; M1.wt := by have := State.ac_le_wt D1; omega</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have key : 5 ≤ M0.ac + M2.ac := by</code><span class="change">goal rewritten</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [← hac1] at *</code><span class="change">~hac1  ~a0</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+hle : M1.c0.wt ≤ D1.ac ∧ M1.c1.wt ≤ D1.ac ∧ M1.c2.wt ≤ D1.ac ∧ M1.c3.wt ≤ D1.ac
+hbr : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt ∧
+  5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt ∧ 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt ∧ 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+hge : D2.c0.wt ≤ M2.ac ∧ D2.c1.wt ≤ M2.ac ∧ D2.c2.wt ≤ M2.ac ∧ D2.c3.wt ≤ M2.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+⊢ 5 ≤ D1.ac + M2.ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨l0, l1, l2, l3⟩ := hle</code><span class="change">+l0  +l1  +l2  +l3  −hle</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+hbr : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt ∧
+  5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt ∧ 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt ∧ 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+hge : D2.c0.wt ≤ M2.ac ∧ D2.c1.wt ≤ M2.ac ∧ D2.c2.wt ≤ M2.ac ∧ D2.c3.wt ≤ M2.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+l0 : M1.c0.wt ≤ D1.ac
+l1 : M1.c1.wt ≤ D1.ac
+l2 : M1.c2.wt ≤ D1.ac
+l3 : M1.c3.wt ≤ D1.ac
+⊢ 5 ≤ D1.ac + M2.ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨b0, b1, b2, b3⟩ := hbr</code><span class="change">+b0  +b1  +b2  +b3  −hbr</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+hge : D2.c0.wt ≤ M2.ac ∧ D2.c1.wt ≤ M2.ac ∧ D2.c2.wt ≤ M2.ac ∧ D2.c3.wt ≤ M2.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+l0 : M1.c0.wt ≤ D1.ac
+l1 : M1.c1.wt ≤ D1.ac
+l2 : M1.c2.wt ≤ D1.ac
+l3 : M1.c3.wt ≤ D1.ac
+b0 : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt
+b1 : 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt
+b2 : 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt
+b3 : 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+⊢ 5 ≤ D1.ac + M2.ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨g0, g1, g2, g3⟩ := hge</code><span class="change">+g0  +g1  +g2  +g3  −hge</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+l0 : M1.c0.wt ≤ D1.ac
+l1 : M1.c1.wt ≤ D1.ac
+l2 : M1.c2.wt ≤ D1.ac
+l3 : M1.c3.wt ≤ D1.ac
+b0 : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt
+b1 : 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt
+b2 : 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt
+b3 : 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+g0 : D2.c0.wt ≤ M2.ac
+g1 : D2.c1.wt ≤ M2.ac
+g2 : D2.c2.wt ≤ M2.ac
+g3 : D2.c3.wt ≤ M2.ac
+⊢ 5 ≤ D1.ac + M2.ac</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rcases State.col_pos m1 with p | p | p | p</code><span class="change">+3 goals  +p</span></div><p class="explain">Takes apart a hypothesis in one go with a pattern: rcases h with ⟨x, hx⟩ | h&#39;.</p><div class="state"><pre class="goal">case inl
+D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+l0 : M1.c0.wt ≤ D1.ac
+l1 : M1.c1.wt ≤ D1.ac
+l2 : M1.c2.wt ≤ D1.ac
+l3 : M1.c3.wt ≤ D1.ac
+b0 : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt
+b1 : 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt
+b2 : 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt
+b3 : 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+g0 : D2.c0.wt ≤ M2.ac
+g1 : D2.c1.wt ≤ M2.ac
+g2 : D2.c2.wt ≤ M2.ac
+g3 : D2.c3.wt ≤ M2.ac
+p : 0 &lt; M1.c0.wt
+⊢ 5 ≤ D1.ac + M2.ac</pre><pre class="goal">case inr.inl
+D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+l0 : M1.c0.wt ≤ D1.ac
+l1 : M1.c1.wt ≤ D1.ac
+l2 : M1.c2.wt ≤ D1.ac
+l3 : M1.c3.wt ≤ D1.ac
+b0 : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt
+b1 : 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt
+b2 : 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt
+b3 : 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+g0 : D2.c0.wt ≤ M2.ac
+g1 : D2.c1.wt ≤ M2.ac
+g2 : D2.c2.wt ≤ M2.ac
+g3 : D2.c3.wt ≤ M2.ac
+p : 0 &lt; M1.c1.wt
+⊢ 5 ≤ D1.ac + M2.ac</pre><pre class="goal">case inr.inr.inl
+D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+l0 : M1.c0.wt ≤ D1.ac
+l1 : M1.c1.wt ≤ D1.ac
+l2 : M1.c2.wt ≤ D1.ac
+l3 : M1.c3.wt ≤ D1.ac
+b0 : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt
+b1 : 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt
+b2 : 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt
+b3 : 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+g0 : D2.c0.wt ≤ M2.ac
+g1 : D2.c1.wt ≤ M2.ac
+g2 : D2.c2.wt ≤ M2.ac
+g3 : D2.c3.wt ≤ M2.ac
+p : 0 &lt; M1.c2.wt
+⊢ 5 ≤ D1.ac + M2.ac</pre><pre class="goal">case inr.inr.inr
+D0 D1 D2 D3 M0 M1 M2 : State
+h01 : 5 * M0.ac ≤ D0.wt + D1.wt
+h23 : 5 * M2.ac ≤ D2.wt + D3.wt
+hx : 0 &lt; D0.wt
+hw0 : M0.wt = D0.wt
+hw1 : M1.wt = D1.wt
+hac1 : D1.ac = D1.ac
+a0 : 0 &lt; D1.ac
+m1 : 0 &lt; M1.wt
+l0 : M1.c0.wt ≤ D1.ac
+l1 : M1.c1.wt ≤ D1.ac
+l2 : M1.c2.wt ≤ D1.ac
+l3 : M1.c3.wt ≤ D1.ac
+b0 : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt
+b1 : 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt
+b2 : 5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt
+b3 : 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt
+g0 : D2.c0.wt ≤ M2.ac
+g1 : D2.c1.wt ≤ M2.ac
+g2 : D2.c2.wt ≤ M2.ac
+g3 : D2.c3.wt ≤ M2.ac
+p : 0 &lt; M1.c3.wt
+⊢ 5 ≤ D1.ac + M2.ac</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; rw [nzw_pos p] at b0; omega</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; rw [nzw_pos p] at b1; omega</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; rw [nzw_pos p] at b2; omega</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; rw [nzw_pos p] at b3; omega</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p225">
+<h2>wt_pos_of_ne <span class="line">line 226</span></h2>
+<pre class="code">theorem wt_pos_of_ne {x y : State} (h : x ≠ y) : 0 &lt; (x ^^^ y).wt := by</pre>
+<p class="words">In words: 0 is less than (x ^^^ y).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x y : State
+h : x ≠ y
+⊢ 0 &lt; (x ^^^ y).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>rcases Nat.eq_zero_or_pos (x ^^^ y).wt with h0 | h0</code><span class="change">+1 goal  +h0</span></div><p class="explain">Takes apart a hypothesis in one go with a pattern: rcases h with ⟨x, hx⟩ | h&#39;.</p><div class="state"><pre class="goal">case inl
+x y : State
+h : x ≠ y
+h0 : (x ^^^ y).wt = 0
+⊢ 0 &lt; (x ^^^ y).wt</pre><pre class="goal">case inr
+x y : State
+h : x ≠ y
+h0 : (x ^^^ y).wt &gt; 0
+⊢ 0 &lt; (x ^^^ y).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; exfalso; apply h</code><span class="change">closed 1 goal</span></div><p class="explain">Changes the goal to False: useful when your hypotheses contradict each other.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x</code><span class="change">+a0  +a1  +a2  +a3  +b0  +b1  +b2  +b3  +c0  +c1  +c2  +c3  +d0  +d1  +d2  +d3  −x  ~h  ~h0</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">case inl
+y : State
+a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 : Byte
+h : { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ≠
+  y
+h0 : ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+      y).wt =
+  0
+⊢ { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } =
+  y</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0&#39;, h1, h2, h3⟩⟩ := y</code><span class="change">+e0  +e1  +e2  +e3  +f0  +f1  +f2  +f3  +g0  +g1  +g2  +g3  +h0&#39;  +h1  +h2  +h3  −y  ~h  ~h0</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">case inl
+a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0&#39; h1 h2 h3 : Byte
+h : { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ≠
+  { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+    c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0&#39;, b1 := h1, b2 := h2, b3 := h3 } }
+h0 : ({ c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+        c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ^^^
+      { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+        c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0&#39;, b1 := h1, b2 := h2, b3 := h3 } }).wt =
+  0
+⊢ { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } =
+  { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+    c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0&#39;, b1 := h1, b2 := h2, b3 := h3 } }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [State.wt, State.xor_def, Nat.add_eq_zero_iff, Word.wt_eq_zero, Word.xor_def,</code><span class="change">~h0</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>Word.zero_def, Word.mk.injEq, UInt8.xor_eq_zero_iff] at h0</code><span class="change">no change</span></div><div class="state"><pre class="goal">case inl
+a0 a1 a2 a3 b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 e0 e1 e2 e3 f0 f1 f2 f3 g0 g1 g2 g3 h0&#39; h1 h2 h3 : Byte
+h : { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } ≠
+  { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+    c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0&#39;, b1 := h1, b2 := h2, b3 := h3 } }
+h0 : (((a0 = e0 ∧ a1 = e1 ∧ a2 = e2 ∧ a3 = e3) ∧ b0 = f0 ∧ b1 = f1 ∧ b2 = f2 ∧ b3 = f3) ∧
+    c0 = g0 ∧ c1 = g1 ∧ c2 = g2 ∧ c3 = g3) ∧
+  d0 = h0&#39; ∧ d1 = h1 ∧ d2 = h2 ∧ d3 = h3
+⊢ { c0 := { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }, c1 := { b0 := b0, b1 := b1, b2 := b2, b3 := b3 },
+    c2 := { b0 := c0, b1 := c1, b2 := c2, b3 := c3 }, c3 := { b0 := d0, b1 := d1, b2 := d2, b3 := d3 } } =
+  { c0 := { b0 := e0, b1 := e1, b2 := e2, b3 := e3 }, c1 := { b0 := f0, b1 := f1, b2 := f2, b3 := f3 },
+    c2 := { b0 := g0, b1 := g1, b2 := g2, b3 := g3 }, c3 := { b0 := h0&#39;, b1 := h1, b2 := h2, b3 := h3 } }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [h0]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact h0</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<details class="source"><summary>The whole file</summary><pre class="code">import AES.Branch
+
+/-!
+# Four rounds activate at least 25 S-boxes
+
+The wide-trail bound of Daemen and Rijmen (*The Design of Rijndael*, Theorem 9.5.1), stated for the
+actual cipher rather than for an abstraction of it. Run two different blocks through four consecutive
+rounds under the same round keys. An S-box is *active* when its two inputs differ. Then at least 25 of
+the 64 S-box applications are active, whatever the key and whatever the two blocks.
+
+That is the fact behind AES&#39;s resistance to differential cryptanalysis: every active S-box passes a
+difference with probability at most 4/256 (`differential uniformity 4`, in `SBoxProps.lean`), so any
+single four-round differential trail has probability at most `(2⁻⁶)&#178;⁵ = 2⁻&#185;⁵⁰`. The linear bound is the
+same argument with nonlinearity 112 in place of uniformity 4.
+
+The proof is the one in the book, with nothing assumed:
+
+1. **Two rounds.** Before `MixColumns`, the difference has as many nonzero bytes as the round&#39;s input
+   difference did, since `SubBytes` is a bijection and `ShiftRows` a permutation. Each active column
+   of it, together with the same column after `MixColumns`, has at least five nonzero bytes (branch
+   number 5). So a round&#39;s input difference and the next round&#39;s together have at least
+   `5 &#215;` (the number of active columns entering `MixColumns`).
+2. **Four rounds.** That gives `5 &#215; (a₀ + a₂)` with `aᵢ` those column counts in rounds 1 and 3. Some
+   column entering round 2&#39;s `MixColumns` is active, and `ShiftRows` gave it at most one byte from each
+   column active after round 1&#39;s, so it has at most `a₀` nonzero bytes. Branch number 5 leaves at least
+   `5 - a₀` nonzero bytes in that column after `MixColumns`, and `ShiftRows` spreads them over as many
+   different columns in round 3. So `a₂ ≥ 5 - a₀`, and the total is at least `5 &#215; 5`.
+-/
+
+namespace AES
+
+/-- A full middle round, as in lines 5–8 of Algorithm 1. -/
+def aesRound (k s : State) : State := addRoundKey (mixColumns (shiftRows (subBytes s))) k
+
+/-- The number of nonzero bytes of a state: for a difference, the number of active S-boxes it meets. -/
+def State.wt (s : State) : Nat := s.c0.wt + s.c1.wt + s.c2.wt + s.c3.wt
+
+/-- How many of the sixteen S-boxes of a `SubBytes` layer see different inputs when it is applied to `x`
+and to `y`: the active S-boxes. -/
+def active (x y : State) : Nat := (x ^^^ y).wt
+
+/-- `1` if the column is nonzero. -/
+def nzw (w : Word) : Nat := if w.wt = 0 then 0 else 1
+
+/-- The number of nonzero columns. -/
+def State.ac (s : State) : Nat := nzw s.c0 + nzw s.c1 + nzw s.c2 + nzw s.c3
+
+/-! ## Bytes and columns -/
+
+theorem nzw_le (w : Word) : nzw w ≤ 1 := by unfold nzw; split &lt;;&gt; omega
+
+theorem nz_le_nzw (a b c d : Byte) :
+    nz a ≤ nzw ⟨a, b, c, d⟩ ∧ nz b ≤ nzw ⟨a, b, c, d⟩ ∧ nz c ≤ nzw ⟨a, b, c, d⟩ ∧ nz d ≤ nzw ⟨a, b, c, d⟩ := by
+  have := nz_le a; have := nz_le b; have := nz_le c; have := nz_le d
+  simp only [nzw, Word.wt]
+  by_cases h : nz a + nz b + nz c + nz d = 0 &lt;;&gt; simp only [h, ↓reduceIte] &lt;;&gt;
+    exact ⟨by omega, by omega, by omega, by omega⟩
+
+theorem nzw_le_wt (w : Word) : nzw w ≤ w.wt := by unfold nzw; split &lt;;&gt; omega
+
+/-- `SubBytes` keeps the pattern of a difference: two bytes differ after the S-box exactly when they
+differed before. -/
+theorem nz_sbox_xor (a b : Byte) : nz (sbox a ^^^ sbox b) = nz (a ^^^ b) := by
+  unfold nz
+  have : sbox a = sbox b ↔ a = b := ⟨sbox_injective, fun h =&gt; h ▸ rfl⟩
+  simp only [UInt8.xor_eq_zero_iff, this]
+
+theorem wt_map_sbox_xor (a b : Word) : (a.map sbox ^^^ b.map sbox).wt = (a ^^^ b).wt := by
+  simp only [Word.wt, Word.map, Word.xor_def, nz_sbox_xor]
+
+/-- `MixColumns` keeps whether a column difference is zero. -/
+theorem nzw_mixColumn_xor (a b : Word) : nzw (mixColumn a ^^^ mixColumn b) = nzw (a ^^^ b) := by
+  rw [← mixColumn_xor]
+  unfold nzw
+  have : mixColumn (a ^^^ b) = 0 ↔ a ^^^ b = 0 := by
+    constructor
+    &#183; intro h; rw [← invMixColumn_mixColumn (a ^^^ b), h, invMixColumn_eq, Mat.apply_zero]
+    &#183; intro h; rw [h, mixColumn_eq, Mat.apply_zero]
+  simp only [Word.wt_eq_zero, this]
+
+/-- A column difference and its image under `MixColumns`: at least five nonzero bytes if active. -/
+theorem branch_col (a b : Word) : 5 * nzw (a ^^^ b) ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt := by
+  by_cases h : a = b
+  &#183; subst h; simp [nzw, Word.wt_eq_zero]
+  &#183; have := branch_mixColumn_diff h
+    have := nzw_le (a ^^^ b)
+    omega
+
+/-! ## States -/
+
+/-- The difference entering `MixColumns` in a round, from the round&#39;s two inputs. -/
+def mcIn (x y : State) : State := shiftRows (subBytes x) ^^^ shiftRows (subBytes y)
+
+theorem wt_mcIn (x y : State) : (mcIn x y).wt = (x ^^^ y).wt := by
+  obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x
+  obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0, h1, h2, h3⟩⟩ := y
+  simp only [mcIn, State.wt, Word.wt, shiftRows, subBytes, State.mapCols, Word.map, State.xor_def,
+    Word.xor_def, nz_sbox_xor]
+  omega
+
+/-- The difference after a round is `MixColumns` applied, column by column, to `mcIn`; the round keys
+cancel. -/
+theorem aesRound_xor (k x y : State) :
+    aesRound k x ^^^ aesRound k y = mixColumns (shiftRows (subBytes x)) ^^^ mixColumns (shiftRows (subBytes y)) := by
+  unfold aesRound addRoundKey
+  generalize mixColumns (shiftRows (subBytes x)) = p
+  generalize mixColumns (shiftRows (subBytes y)) = q
+  simp only [State.xor_def, Word.xor_def, xor_xor_cancel]
+
+/-- Two rounds: a round&#39;s input difference and the next round&#39;s input difference have at least
+`5 &#215;` (active columns entering `MixColumns`) nonzero bytes between them. -/
+theorem two_rounds (k x y : State) :
+    5 * (mcIn x y).ac ≤ (x ^^^ y).wt + (aesRound k x ^^^ aesRound k y).wt := by
+  rw [← wt_mcIn, aesRound_xor]
+  generalize hp : shiftRows (subBytes x) = p
+  generalize hq : shiftRows (subBytes y) = q
+  have hm : mcIn x y = p ^^^ q := by rw [mcIn, hp, hq]
+  rw [hm]
+  obtain ⟨p0, p1, p2, p3⟩ := p
+  obtain ⟨q0, q1, q2, q3⟩ := q
+  have := branch_col p0 q0; have := branch_col p1 q1; have := branch_col p2 q2; have := branch_col p3 q3
+  simp only [State.ac, State.wt, mixColumns, State.mapCols, State.xor_def] at *
+  omega
+
+/-- The active columns after a round are the active columns entering its `MixColumns`. -/
+theorem ac_aesRound_xor (k x y : State) : (aesRound k x ^^^ aesRound k y).ac = (mcIn x y).ac := by
+  rw [aesRound_xor, mcIn]
+  generalize shiftRows (subBytes x) = p
+  generalize shiftRows (subBytes y) = q
+  obtain ⟨p0, p1, p2, p3⟩ := p
+  obtain ⟨q0, q1, q2, q3⟩ := q
+  simp only [State.ac, mixColumns, State.mapCols, State.xor_def, nzw_mixColumn_xor]
+
+/-- `ShiftRows` gathers each column from four different columns, so a column of `mcIn` has at most as
+many nonzero bytes as the round&#39;s input difference has active columns. -/
+theorem wt_mcIn_col_le (x y : State) :
+    (mcIn x y).c0.wt ≤ (x ^^^ y).ac ∧ (mcIn x y).c1.wt ≤ (x ^^^ y).ac ∧
+    (mcIn x y).c2.wt ≤ (x ^^^ y).ac ∧ (mcIn x y).c3.wt ≤ (x ^^^ y).ac := by
+  obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x
+  obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0, h1, h2, h3⟩⟩ := y
+  have := nz_le_nzw (a0 ^^^ e0) (a1 ^^^ e1) (a2 ^^^ e2) (a3 ^^^ e3)
+  have := nz_le_nzw (b0 ^^^ f0) (b1 ^^^ f1) (b2 ^^^ f2) (b3 ^^^ f3)
+  have := nz_le_nzw (c0 ^^^ g0) (c1 ^^^ g1) (c2 ^^^ g2) (c3 ^^^ g3)
+  have := nz_le_nzw (d0 ^^^ h0) (d1 ^^^ h1) (d2 ^^^ h2) (d3 ^^^ h3)
+  simp only [mcIn, State.ac, Word.wt, shiftRows, subBytes, State.mapCols, Word.map, State.xor_def,
+    Word.xor_def, nz_sbox_xor] at *
+  omega
+
+/-- and, the other way, it sends the four bytes of any one column to four different columns. -/
+theorem ac_mcIn_ge (x y : State) :
+    (x ^^^ y).c0.wt ≤ (mcIn x y).ac ∧ (x ^^^ y).c1.wt ≤ (mcIn x y).ac ∧
+    (x ^^^ y).c2.wt ≤ (mcIn x y).ac ∧ (x ^^^ y).c3.wt ≤ (mcIn x y).ac := by
+  obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x
+  obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0, h1, h2, h3⟩⟩ := y
+  simp only [mcIn, State.ac, Word.wt, shiftRows, subBytes, State.mapCols, Word.map, State.xor_def,
+    Word.xor_def]
+  have := nz_le_nzw (sbox a0 ^^^ sbox e0) (sbox b1 ^^^ sbox f1) (sbox c2 ^^^ sbox g2) (sbox d3 ^^^ sbox h3)
+  have := nz_le_nzw (sbox b0 ^^^ sbox f0) (sbox c1 ^^^ sbox g1) (sbox d2 ^^^ sbox h2) (sbox a3 ^^^ sbox e3)
+  have := nz_le_nzw (sbox c0 ^^^ sbox g0) (sbox d1 ^^^ sbox h1) (sbox a2 ^^^ sbox e2) (sbox b3 ^^^ sbox f3)
+  have := nz_le_nzw (sbox d0 ^^^ sbox h0) (sbox a1 ^^^ sbox e1) (sbox b2 ^^^ sbox f2) (sbox c3 ^^^ sbox g3)
+  simp only [nz_sbox_xor] at *
+  omega
+
+/-- The branch number, applied to column `j` of round 2&#39;s `MixColumns`. -/
+theorem branch_round_cols (k x y : State) :
+    5 * nzw (mcIn x y).c0 ≤ (mcIn x y).c0.wt + (aesRound k x ^^^ aesRound k y).c0.wt ∧
+    5 * nzw (mcIn x y).c1 ≤ (mcIn x y).c1.wt + (aesRound k x ^^^ aesRound k y).c1.wt ∧
+    5 * nzw (mcIn x y).c2 ≤ (mcIn x y).c2.wt + (aesRound k x ^^^ aesRound k y).c2.wt ∧
+    5 * nzw (mcIn x y).c3 ≤ (mcIn x y).c3.wt + (aesRound k x ^^^ aesRound k y).c3.wt := by
+  rw [aesRound_xor, mcIn]
+  generalize shiftRows (subBytes x) = p
+  generalize shiftRows (subBytes y) = q
+  obtain ⟨p0, p1, p2, p3⟩ := p
+  obtain ⟨q0, q1, q2, q3⟩ := q
+  simp only [mixColumns, State.mapCols, State.xor_def]
+  exact ⟨branch_col p0 q0, branch_col p1 q1, branch_col p2 q2, branch_col p3 q3⟩
+
+theorem wt_le_four_nzw (w : Word) : w.wt ≤ 4 * nzw w := by
+  have := nz_le w.b0; have := nz_le w.b1; have := nz_le w.b2; have := nz_le w.b3
+  unfold nzw Word.wt at *; split &lt;;&gt; omega
+
+theorem nzw_pos {w : Word} (h : 0 &lt; w.wt) : nzw w = 1 := by unfold nzw; split &lt;;&gt; omega
+
+theorem State.wt_le_four_ac (s : State) : s.wt ≤ 4 * s.ac := by
+  have := wt_le_four_nzw s.c0; have := wt_le_four_nzw s.c1
+  have := wt_le_four_nzw s.c2; have := wt_le_four_nzw s.c3
+  unfold State.wt State.ac; omega
+
+theorem State.ac_le_wt (s : State) : s.ac ≤ s.wt := by
+  have := nzw_le_wt s.c0; have := nzw_le_wt s.c1; have := nzw_le_wt s.c2; have := nzw_le_wt s.c3
+  unfold State.wt State.ac; omega
+
+theorem State.col_pos {s : State} (h : 0 &lt; s.wt) :
+    0 &lt; s.c0.wt ∨ 0 &lt; s.c1.wt ∨ 0 &lt; s.c2.wt ∨ 0 &lt; s.c3.wt := by
+  unfold State.wt at h; omega
+
+/-! ## Four rounds -/
+
+/-- The counting at the heart of the four-round bound, over abstract differences `Dᵢ` (round inputs) and
+`Mᵢ` (what enters `MixColumns` in round `i + 1`). Kept apart from the cipher so that the arithmetic
+never has to look inside a round. -/
+theorem four_rounds_count (D0 D1 D2 D3 M0 M1 M2 : State)
+    (h01 : 5 * M0.ac ≤ D0.wt + D1.wt) (h23 : 5 * M2.ac ≤ D2.wt + D3.wt)
+    (hx : 0 &lt; D0.wt) (hw0 : M0.wt = D0.wt) (hw1 : M1.wt = D1.wt) (hac1 : D1.ac = M0.ac)
+    (hle : M1.c0.wt ≤ D1.ac ∧ M1.c1.wt ≤ D1.ac ∧ M1.c2.wt ≤ D1.ac ∧ M1.c3.wt ≤ D1.ac)
+    (hbr : 5 * nzw M1.c0 ≤ M1.c0.wt + D2.c0.wt ∧ 5 * nzw M1.c1 ≤ M1.c1.wt + D2.c1.wt ∧
+      5 * nzw M1.c2 ≤ M1.c2.wt + D2.c2.wt ∧ 5 * nzw M1.c3 ≤ M1.c3.wt + D2.c3.wt)
+    (hge : D2.c0.wt ≤ M2.ac ∧ D2.c1.wt ≤ M2.ac ∧ D2.c2.wt ≤ M2.ac ∧ D2.c3.wt ≤ M2.ac) :
+    25 ≤ D0.wt + D1.wt + D2.wt + D3.wt := by
+  -- round 1 has an active column, and so round 2&#39;s `MixColumns` input is nonzero
+  have a0 : 0 &lt; M0.ac := by have := State.wt_le_four_ac M0; omega
+  have m1 : 0 &lt; M1.wt := by have := State.ac_le_wt D1; omega
+  -- in round 2, an active column carries at most `M0.ac` bytes in and at least `5 - M0.ac` out
+  have key : 5 ≤ M0.ac + M2.ac := by
+    rw [← hac1] at *
+    obtain ⟨l0, l1, l2, l3⟩ := hle
+    obtain ⟨b0, b1, b2, b3⟩ := hbr
+    obtain ⟨g0, g1, g2, g3⟩ := hge
+    rcases State.col_pos m1 with p | p | p | p
+    &#183; rw [nzw_pos p] at b0; omega
+    &#183; rw [nzw_pos p] at b1; omega
+    &#183; rw [nzw_pos p] at b2; omega
+    &#183; rw [nzw_pos p] at b3; omega
+  omega
+
+theorem wt_pos_of_ne {x y : State} (h : x ≠ y) : 0 &lt; (x ^^^ y).wt := by
+  rcases Nat.eq_zero_or_pos (x ^^^ y).wt with h0 | h0
+  &#183; exfalso; apply h
+    obtain ⟨⟨a0, a1, a2, a3⟩, ⟨b0, b1, b2, b3⟩, ⟨c0, c1, c2, c3⟩, ⟨d0, d1, d2, d3⟩⟩ := x
+    obtain ⟨⟨e0, e1, e2, e3⟩, ⟨f0, f1, f2, f3⟩, ⟨g0, g1, g2, g3⟩, ⟨h0&#39;, h1, h2, h3⟩⟩ := y
+    simp only [State.wt, State.xor_def, Nat.add_eq_zero_iff, Word.wt_eq_zero, Word.xor_def,
+      Word.zero_def, Word.mk.injEq, UInt8.xor_eq_zero_iff] at h0
+    simp [h0]
+  &#183; exact h0
+
+/-- The wide-trail bound. Two different blocks `x ≠ y` go through four rounds&#39; worth of S-boxes:
+the inputs of rounds 1 to 4 are `x`, `R₁ x`, `R₂ (R₁ x)`, `R₃ (R₂ (R₁ x))`, where `Rᵢ` is a full round
+under any round key `kᵢ`. Across those four layers, at least 25 S-boxes see different inputs. -/
+theorem four_rounds_active (k1 k2 k3 x y : State) (h : x ≠ y) :
+    25 ≤ active x y + active (aesRound k1 x) (aesRound k1 y) +
+      active (aesRound k2 (aesRound k1 x)) (aesRound k2 (aesRound k1 y)) +
+      active (aesRound k3 (aesRound k2 (aesRound k1 x))) (aesRound k3 (aesRound k2 (aesRound k1 y))) :=
+  four_rounds_count _ _ _ _ (mcIn x y) (mcIn (aesRound k1 x) (aesRound k1 y))
+    (mcIn (aesRound k2 (aesRound k1 x)) (aesRound k2 (aesRound k1 y)))
+    (two_rounds k1 x y) (two_rounds k3 _ _) (wt_pos_of_ne h) (wt_mcIn x y) (wt_mcIn _ _)
+    (ac_aesRound_xor k1 x y) (wt_mcIn_col_le _ _) (branch_round_cols k2 _ _) (ac_mcIn_ge _ _)
+
+/-- The same, for any four consecutive rounds of AES-256 encryption under any key schedule. -/
+theorem cipherRounds_four_active (rk : Nat → State) (r : Nat) (x y : State) (h : x ≠ y) :
+    25 ≤ active x y + active (cipherRounds rk 1 r x) (cipherRounds rk 1 r y) +
+      active (cipherRounds rk 2 r x) (cipherRounds rk 2 r y) +
+      active (cipherRounds rk 3 r x) (cipherRounds rk 3 r y) :=
+  four_rounds_active (rk r) (rk (r + 1)) (rk (r + 2)) x y h
+
+end AES
+</pre></details>
+<footer>Made with <a href="https://github.com/keithadler/leanstudio">Lean Studio</a>, by Keith Adler (<a href="https://x.com/keithadler">@keithadler</a>). Goals are exactly as Lean reported them.</footer>
+</main>
+<script>
+const steps = [...document.querySelectorAll('.step')];
+let at = -1;
+function go(i) {
+  if (i < 0 || i >= steps.length) return;
+  steps.forEach(s => s.classList.remove('current'));
+  at = i; steps[i].classList.add('current'); steps[i].focus({ preventScroll: true });
+  steps[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+steps.forEach((s, i) => s.addEventListener('click', () => go(i)));
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'j') { go(at + 1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft' || e.key === 'k') { go(at - 1); e.preventDefault(); }
+});</script>
+</body></html>

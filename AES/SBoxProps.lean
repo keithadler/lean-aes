@@ -53,6 +53,7 @@ def PARN : Nat := 0x699696699669699696696996699696699669699669969669699696699669
 /-- `S(x)` in one shift and one remainder, both done by GMP in the kernel. -/
 def sboxN (x : Nat) : Nat := Nat.mod (Nat.shiftRight SBOXN (Nat.mul 8 x)) 256
 
+/-- `parity x` in one shift and one remainder. -/
 def parN (x : Nat) : Bool := Nat.beq (Nat.mod (Nat.shiftRight PARN x) 2) 1
 
 theorem sboxN_spec (x : Byte) : sboxN x.toNat = (sbox x).toNat := by
@@ -104,7 +105,7 @@ theorem ddt_eq (a b : Byte) : ddt a b = sum (fun x => if b.toNat = 0 + dN a.toNa
       rw [beq_eq_false_iff_ne.mpr h, beq_eq_false_iff_ne.mpr this]
   simp only [Function.comp_def, e, beq_iff_eq]
 
-/-- **Differential uniformity 4.** A nonzero input difference goes to any given output difference for
+/-- Differential uniformity 4. A nonzero input difference goes to any given output difference for
 at most 4 of the 256 inputs. -/
 theorem ddt_le_four (a b : Byte) (ha : a ≠ 0) : ddt a b ≤ 4 := by
   have hrow := allBelow_spec duCheck_eq a.toNat a.toNat_lt
@@ -119,13 +120,14 @@ theorem ddt_le_four (a b : Byte) (ha : a ≠ 0) : ddt a b ≤ 4 := by
   rw [ddt_eq]
   exact hd.2
 
-/-- **and exactly 4**: the bound is reached. -/
+/-- and exactly 4: the bound is reached. -/
 theorem ddt_eq_four : ddt 1 31 = 4 := by decide +kernel
 
 /-! ## Nonlinearity -/
 
-/-- The digits `[a · x = 0]` over all masks `a`, and the digits `[a · x = 1]`. -/
+/-- The digits `[a · x = 0]`, one for each mask `a`. -/
 def P0 (x : Nat) : Nat := ofDigits (fun a => cond (parN (Nat.land a x)) 0 1) 256 0
+/-- The digits `[a · x = 1]`, one for each mask `a`. -/
 def P1 (x : Nat) : Nat := ofDigits (fun a => cond (parN (Nat.land a x)) 1 0) 256 0
 
 /-- Column `b` of the linear table, one digit per input mask `a`. For each input `x`, the masks `a`
@@ -157,7 +159,7 @@ theorem agree_eq (a b : Byte) :
     rw [← parN_spec, UInt8.toNat_and, ← sboxN_spec, toNat_toUInt8 hx]; rfl
   simp only [Function.comp_def, e1, e2, beq_iff_eq]
 
-/-- **Nonlinearity 112.** Every linear approximation `a · x = b · S(x)` with `b ≠ 0` holds for between
+/-- Nonlinearity 112. Every linear approximation `a · x = b · S(x)` with `b ≠ 0` holds for between
 112 and 144 of the 256 inputs: its bias is at most 16/256. -/
 theorem agree_bounds (a b : Byte) (hb : b ≠ 0) : 112 ≤ agree a b ∧ agree a b ≤ 144 := by
   have hcol := allBelow_spec nlCheck_eq b.toNat b.toNat_lt
@@ -172,7 +174,7 @@ theorem agree_bounds (a b : Byte) (hb : b ≠ 0) : 112 ≤ agree a b ∧ agree a
   rw [agree_eq]
   exact hd
 
-/-- **and exactly 112**: the bound is reached, so the nonlinearity is 112, not more. -/
+/-- and exactly 112: the bound is reached, so the nonlinearity is 112, not more. -/
 theorem agree_eq_112 : agree 45 1 = 112 := by decide +kernel
 
 end AES

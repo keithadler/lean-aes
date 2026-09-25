@@ -1,0 +1,1803 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branch.lean · proof walkthrough</title>
+<style>
+:root { --bg:#fbfaf8; --fg:#1d1d1f; --dim:#6b6b70; --card:#ffffff; --line:#e4e2dd; --accent:#3f6fd8; --ok:#1f8a3b; --code:#f3f1ec; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16171a; --fg:#e6e6e9; --dim:#9a9aa3; --card:#1e2024; --line:#2e3036; --accent:#7aa2f7; --ok:#4cc36b; --code:#23252b; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; } h2 { font-size: 20px; margin: 0 0 12px; }
+.sub, .line, .words, footer, .explain { color: var(--dim); }
+.line { font-size: 13px; font-weight: normal; margin-left: 6px; }
+a { color: var(--accent); }
+.button { display:inline-block; padding:6px 14px; border:1px solid var(--accent); border-radius:6px; text-decoration:none; }
+nav { margin: 20px 0; display:flex; flex-wrap:wrap; gap:6px 12px; font-size:14px; }
+pre, code { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+pre.code { background: var(--code); padding: 12px 14px; border-radius: 8px; }
+.proof { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; }
+.state { margin-top: 8px; }
+.state.start { margin: 12px 0 4px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-bottom: 4px; }
+.goal { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 4px 0; background: var(--code); border-radius: 0 6px 6px 0; }
+.none { color: var(--ok); font-weight: 600; }
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 16px 0 0; }
+.step { counter-increment: s; position: relative; padding: 12px 12px 12px 44px; border-top: 1px solid var(--line); outline: none; }
+.step::before { content: counter(s); position: absolute; left: 8px; top: 12px; width: 24px; height: 24px; border-radius: 50%;
+                background: var(--code); color: var(--dim); font-size: 13px; text-align: center; line-height: 24px; }
+.step.done::before { background: var(--ok); color: #fff; content: "✓"; }
+.step.current { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
+.tactic { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.tactic code { font-weight: 600; }
+.change { font-size: 13px; color: var(--dim); }
+.explain { margin: 4px 0 0; font-size: 14px; }
+details.source { margin-top: 24px; } footer { margin-top: 32px; font-size: 13px; }</style></head><body>
+<main>
+<header><h1>Branch.lean</h1><p class="sub">A step-by-step walkthrough of 26 proofs. Each step shows the tactic, what it does, and the goals Lean is left with. Use ← and → to step through.</p><p><a class="button" href="https://live.lean-lang.org/#code=import%20AES.Linear%0A%0A%2F-%21%0A%23%20The%20branch%20number%20of%20MixColumns%20is%205%0A%0AThe%20branch%20number%20of%20a%20column%20map%20%60M%60%20is%20the%20least%20value%20of%20%60wt%20a%20%2B%20wt%20%28M%20a%29%60%20over%20nonzero%20columns%20%60a%60%2C%0Awhere%20%60wt%60%20counts%20nonzero%20bytes%20%28%2AThe%20Design%20of%20Rijndael%2A%2C%20%C2%A79.3%29.%20For%20%60MixColumns%60%20it%20is%205%2C%20the%20most%20a%0A4%C3%974%20map%20can%20have%3A%20a%20change%20in%20one%20byte%20of%20a%20column%20changes%20all%20four%20bytes%20of%20the%20output%2C%20a%20change%20in%20two%0Achanges%20at%20least%20three%2C%20and%20so%20on.%0A%0AA%20search%20over%20all%202%C2%B3%C2%B2%20columns%20would%20settle%20it%2C%20and%20is%20what%20a%20SAT%20solver%20does.%20Here%20it%20is%20proved%20instead%2C%0Ain%20the%20kernel%2C%20from%20the%20algebra%20of%20%60GF.lean%60%3A%0A%0A%2A%20%60M%60%20commutes%20with%20scaling%20a%20column%20by%20a%20nonzero%20%60%CE%BB%60%2C%20which%20does%20not%20change%20which%20bytes%20are%20zero.%20So%20a%0A%20%20column%20with%20nonzero%20bytes%20in%20two%20places%20can%20be%20scaled%20so%20that%20the%20first%20of%20them%20is%20%601%60%2C%20and%20only%20the%0A%20%20255%20values%20of%20the%20second%20remain%3A%206%20%C3%97%20255%20cases%20for%20weight%202%2C%204%20cases%20for%20weight%201.%0A%2A%20For%20weight%203%20and%204%2C%20look%20at%20the%20output%20instead.%20If%20it%20had%20weight%20at%20most%201%2C%20it%20would%20be%20%60z%60%20times%20a%0A%20%20unit%20vector%2C%20and%20the%20input%20would%20be%20%60z%60%20times%20a%20column%20of%20%60M%E2%81%BB%C2%B9%60%2C%20which%20has%20four%20nonzero%20bytes.%0A-%2F%0A%0Anamespace%20AES%0A%0Aset_option%20maxHeartbeats%200%0A%0A%2F--%20%601%60%20if%20the%20byte%20is%20nonzero.%20-%2F%0Adef%20nz%20%28b%20%3A%20Byte%29%20%3A%20Nat%20%3A%3D%20if%20b%20%3D%200%20then%200%20else%201%0A%0A%2F--%20The%20number%20of%20nonzero%20bytes%20of%20a%20column.%20-%2F%0Adef%20Word.wt%20%28w%20%3A%20Word%29%20%3A%20Nat%20%3A%3D%20nz%20w.b0%20%2B%20nz%20w.b1%20%2B%20nz%20w.b2%20%2B%20nz%20w.b3%0A%0A%40%5Bsimp%5D%20theorem%20nz_zero%20%3A%20nz%200%20%3D%200%20%3A%3D%20rfl%0Atheorem%20nz_of_ne%20%7Bb%20%3A%20Byte%7D%20%28h%20%3A%20b%20%E2%89%A0%200%29%20%3A%20nz%20b%20%3D%201%20%3A%3D%20by%20simp%20%5Bnz%2C%20h%5D%0Atheorem%20nz_le%20%28b%20%3A%20Byte%29%20%3A%20nz%20b%20%E2%89%A4%201%20%3A%3D%20by%20unfold%20nz%3B%20split%20%3C%3B%3E%20omega%0A%0Atheorem%20Word.wt_eq_zero%20%7Bw%20%3A%20Word%7D%20%3A%20w.wt%20%3D%200%20%E2%86%94%20w%20%3D%200%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8a%2C%20b%2C%20c%2C%20d%E2%9F%A9%20%3A%3D%20w%0A%20%20simp%20only%20%5Bwt%2C%20nz%2C%20zero_def%2C%20mk.injEq%5D%0A%20%20split%20%3C%3B%3E%20split%20%3C%3B%3E%20split%20%3C%3B%3E%20split%20%3C%3B%3E%20simp_all%0A%0A%2F--%20Multiply%20every%20byte%20by%20%60%CE%BB%60.%20-%2F%0Adef%20Word.scale%20%28l%20%3A%20Byte%29%20%28w%20%3A%20Word%29%20%3A%20Word%20%3A%3D%20w.map%20%28mul%20l%29%0A%0Atheorem%20dot_scale%20%28r%20%3A%20Word%29%20%28l%20%3A%20Byte%29%20%28w%20%3A%20Word%29%20%3A%20dot%20r%20%28w.scale%20l%29%20%3D%20mul%20l%20%28dot%20r%20w%29%20%3A%3D%20by%0A%20%20simp%20only%20%5Bdot%2C%20Word.scale%2C%20Word.map%2C%20mul_xor%2C%20mul_left_comm%20l%5D%0A%0Atheorem%20Mat.apply_scale%20%28m%20%3A%20Mat%29%20%28l%20%3A%20Byte%29%20%28w%20%3A%20Word%29%20%3A%20m.apply%20%28w.scale%20l%29%20%3D%20%28m.apply%20w%29.scale%20l%20%3A%3D%20by%0A%20%20simp%20only%20%5BMat.apply%2C%20dot_scale%5D%3B%20rfl%0A%0Atheorem%20nz_mul%20%7Bl%20%3A%20Byte%7D%20%28hl%20%3A%20l%20%E2%89%A0%200%29%20%28b%20%3A%20Byte%29%20%3A%20nz%20%28mul%20l%20b%29%20%3D%20nz%20b%20%3A%3D%20by%0A%20%20unfold%20nz%0A%20%20by_cases%20hb%20%3A%20b%20%3D%200%0A%20%20%C2%B7%20simp%20%5Bhb%2C%20mul_zero%5D%0A%20%20%C2%B7%20simp%20%5Bhb%2C%20mul_ne_zero%20hl%20hb%5D%0A%0Atheorem%20Word.wt_scale%20%7Bl%20%3A%20Byte%7D%20%28hl%20%3A%20l%20%E2%89%A0%200%29%20%28w%20%3A%20Word%29%20%3A%20%28w.scale%20l%29.wt%20%3D%20w.wt%20%3A%3D%20by%0A%20%20simp%20only%20%5Bwt%2C%20scale%2C%20map%2C%20nz_mul%20hl%5D%0A%0A%2F-%21%20%23%23%20Columns%20with%20one%20or%20two%20nonzero%20bytes%20-%2F%0A%0A%2F--%20Scaling%20a%20column%20whose%20byte%20%60i%60%20is%20%60x%20%E2%89%A0%200%60%20by%20%60x%E2%81%BB%C2%B9%60%20makes%20that%20byte%20%601%60%3B%20written%20out%20for%20the%20ten%0Ashapes%20a%20column%20of%20weight%20one%20or%20two%20can%20have.%20-%2F%0Atheorem%20scale_inv_mul%20%7Bx%20%3A%20Byte%7D%20%28hx%20%3A%20x%20%E2%89%A0%200%29%20%28y%20%3A%20Byte%29%20%3A%20mul%20x%20%28mul%20%28inv%20x%29%20y%29%20%3D%20y%20%3A%3D%20mul_inv_mul%20hx%20y%0A%0A%2F--%20A%20weight-one%20column%20is%20a%20multiple%20of%20a%20unit%20vector%2C%20so%20its%20image%20has%20the%20weight%20of%20a%20column%20of%20%60m%60.%20-%2F%0Atheorem%20wt_apply_single%20%28m%20%3A%20Mat%29%20%7Bx%20%3A%20Byte%7D%20%28hx%20%3A%20x%20%E2%89%A0%200%29%20%28u%20%3A%20Word%29%20%28hu%20%3A%20u.scale%20x%20%3D%20v%29%20%3A%0A%20%20%20%20%28m.apply%20v%29.wt%20%3D%20%28m.apply%20u%29.wt%20%3A%3D%20by%0A%20%20rw%20%5B%E2%86%90%20hu%2C%20Mat.apply_scale%2C%20Word.wt_scale%20hx%5D%0A%0Atheorem%20single0%20%28x%20%3A%20Byte%29%20%3A%20%28%E2%9F%A81%2C%200%2C%200%2C%200%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A8x%2C%200%2C%200%2C%200%E2%9F%A9%20%3A%3D%20by%0A%20%20simp%20%5BWord.scale%2C%20Word.map%2C%20mul_one%2C%20mul_zero%5D%0Atheorem%20single1%20%28x%20%3A%20Byte%29%20%3A%20%28%E2%9F%A80%2C%201%2C%200%2C%200%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A80%2C%20x%2C%200%2C%200%E2%9F%A9%20%3A%3D%20by%0A%20%20simp%20%5BWord.scale%2C%20Word.map%2C%20mul_one%2C%20mul_zero%5D%0Atheorem%20single2%20%28x%20%3A%20Byte%29%20%3A%20%28%E2%9F%A80%2C%200%2C%201%2C%200%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A80%2C%200%2C%20x%2C%200%E2%9F%A9%20%3A%3D%20by%0A%20%20simp%20%5BWord.scale%2C%20Word.map%2C%20mul_one%2C%20mul_zero%5D%0Atheorem%20single3%20%28x%20%3A%20Byte%29%20%3A%20%28%E2%9F%A80%2C%200%2C%200%2C%201%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A80%2C%200%2C%200%2C%20x%E2%9F%A9%20%3A%3D%20by%0A%20%20simp%20%5BWord.scale%2C%20Word.map%2C%20mul_one%2C%20mul_zero%5D%0A%0A%2F--%20Every%20column%20of%20%60MixColumns%60%20and%20of%20%60InvMixColumns%60%20has%20four%20nonzero%20bytes.%20-%2F%0Atheorem%20mix_units%20%3A%20%28mixMat.apply%20%E2%9F%A81%2C%200%2C%200%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%20%28mixMat.apply%20%E2%9F%A80%2C%201%2C%200%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%0A%20%20%20%20%28mixMat.apply%20%E2%9F%A80%2C%200%2C%201%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%20%28mixMat.apply%20%E2%9F%A80%2C%200%2C%200%2C%201%E2%9F%A9%29.wt%20%3D%204%20%3A%3D%20by%20decide%20%2Bkernel%0Atheorem%20invMix_units%20%3A%20%28invMixMat.apply%20%E2%9F%A81%2C%200%2C%200%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%20%28invMixMat.apply%20%E2%9F%A80%2C%201%2C%200%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%0A%20%20%20%20%28invMixMat.apply%20%E2%9F%A80%2C%200%2C%201%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%20%28invMixMat.apply%20%E2%9F%A80%2C%200%2C%200%2C%201%E2%9F%A9%29.wt%20%3D%204%20%3A%3D%20by%20decide%20%2Bkernel%0A%0A%2F--%20The%20weight-two%20check%3A%20with%20the%20first%20nonzero%20byte%20scaled%20to%20%601%60%2C%20every%20value%20of%20the%20second%20gives%20an%0Aoutput%20with%20at%20least%20three%20nonzero%20bytes.%20Six%20positions%2C%20256%20values%20each.%20-%2F%0Atheorem%20mix_pairs%20%3A%20allBytes%20%28fun%20%CE%BC%20%3D%3E%20%CE%BC%20%3D%3D%200%20%7C%7C%20%28%0A%20%20%20%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A81%2C%20%CE%BC%2C%200%2C%200%E2%9F%A9%29.wt%20%26%26%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A81%2C%200%2C%20%CE%BC%2C%200%E2%9F%A9%29.wt%20%26%26%0A%20%20%20%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A81%2C%200%2C%200%2C%20%CE%BC%E2%9F%A9%29.wt%20%26%26%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A80%2C%201%2C%20%CE%BC%2C%200%E2%9F%A9%29.wt%20%26%26%0A%20%20%20%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A80%2C%201%2C%200%2C%20%CE%BC%E2%9F%A9%29.wt%20%26%26%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A80%2C%200%2C%201%2C%20%CE%BC%E2%9F%A9%29.wt%29%29%20%3D%20true%20%3A%3D%20by%0A%20%20decide%20%2Bkernel%0A%0Atheorem%20mix_pair_spec%20%7B%CE%BC%20%3A%20Byte%7D%20%28h%20%3A%20%CE%BC%20%E2%89%A0%200%29%20%3A%0A%20%20%20%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A81%2C%20%CE%BC%2C%200%2C%200%E2%9F%A9%29.wt%20%E2%88%A7%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A81%2C%200%2C%20%CE%BC%2C%200%E2%9F%A9%29.wt%20%E2%88%A7%0A%20%20%20%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A81%2C%200%2C%200%2C%20%CE%BC%E2%9F%A9%29.wt%20%E2%88%A7%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A80%2C%201%2C%20%CE%BC%2C%200%E2%9F%A9%29.wt%20%E2%88%A7%0A%20%20%20%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A80%2C%201%2C%200%2C%20%CE%BC%E2%9F%A9%29.wt%20%E2%88%A7%203%20%E2%89%A4%20%28mixMat.apply%20%E2%9F%A80%2C%200%2C%201%2C%20%CE%BC%E2%9F%A9%29.wt%20%3A%3D%20by%0A%20%20simpa%20%5Bh%2C%20and_assoc%5D%20using%20allBytes_spec%20mix_pairs%20%CE%BC%0A%0A%2F--%20A%20column%20with%20nonzero%20bytes%20%60x%60%20and%20%60y%60%20in%20two%20places%20is%20%60x%60%20times%20one%20with%20%601%60%20and%20%60x%E2%81%BB%C2%B9%20%E2%80%A2%20y%60.%20-%2F%0Atheorem%20pair_scale%20%7Bx%20%3A%20Byte%7D%20%28hx%20%3A%20x%20%E2%89%A0%200%29%20%28y%20%3A%20Byte%29%20%3A%0A%20%20%20%20%28%E2%9F%A81%2C%20mul%20%28inv%20x%29%20y%2C%200%2C%200%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A8x%2C%20y%2C%200%2C%200%E2%9F%A9%20%E2%88%A7%0A%20%20%20%20%28%E2%9F%A81%2C%200%2C%20mul%20%28inv%20x%29%20y%2C%200%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A8x%2C%200%2C%20y%2C%200%E2%9F%A9%20%E2%88%A7%0A%20%20%20%20%28%E2%9F%A81%2C%200%2C%200%2C%20mul%20%28inv%20x%29%20y%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A8x%2C%200%2C%200%2C%20y%E2%9F%A9%20%E2%88%A7%0A%20%20%20%20%28%E2%9F%A80%2C%201%2C%20mul%20%28inv%20x%29%20y%2C%200%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A80%2C%20x%2C%20y%2C%200%E2%9F%A9%20%E2%88%A7%0A%20%20%20%20%28%E2%9F%A80%2C%201%2C%200%2C%20mul%20%28inv%20x%29%20y%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A80%2C%20x%2C%200%2C%20y%E2%9F%A9%20%E2%88%A7%0A%20%20%20%20%28%E2%9F%A80%2C%200%2C%201%2C%20mul%20%28inv%20x%29%20y%E2%9F%A9%20%3A%20Word%29.scale%20x%20%3D%20%E2%9F%A80%2C%200%2C%20x%2C%20y%E2%9F%A9%20%3A%3D%20by%0A%20%20simp%20%5BWord.scale%2C%20Word.map%2C%20mul_one%2C%20mul_zero%2C%20mul_inv_mul%20hx%5D%0A%0Atheorem%20inv_mul_ne_zero%20%7Bx%20y%20%3A%20Byte%7D%20%28hx%20%3A%20x%20%E2%89%A0%200%29%20%28hy%20%3A%20y%20%E2%89%A0%200%29%20%3A%20mul%20%28inv%20x%29%20y%20%E2%89%A0%200%20%3A%3D%0A%20%20mul_ne_zero%20%28inv_ne_zero%20hx%29%20hy%0A%0A%2F--%20Columns%20of%20weight%20one%20or%20two%3A%20the%20output%20makes%20up%20the%20rest%20of%20the%205.%20-%2F%0Atheorem%20branch_low%20%28a%20%3A%20Word%29%20%28ha%20%3A%20a%20%E2%89%A0%200%29%20%28hw%20%3A%20a.wt%20%E2%89%A4%202%29%20%3A%205%20%E2%89%A4%20a.wt%20%2B%20%28mixMat.apply%20a%29.wt%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%20%3A%3D%20a%0A%20%20obtain%20%E2%9F%A8m0%2C%20m1%2C%20m2%2C%20m3%E2%9F%A9%20%3A%3D%20mix_units%0A%20%20by_cases%20h0%20%3A%20a0%20%3D%200%20%3C%3B%3E%20by_cases%20h1%20%3A%20a1%20%3D%200%20%3C%3B%3E%20by_cases%20h2%20%3A%20a2%20%3D%200%20%3C%3B%3E%20by_cases%20h3%20%3A%20a3%20%3D%200%20%3C%3B%3E%0A%20%20%20%20%28try%20simp%20only%20%5Bh0%2C%20h1%2C%20h2%2C%20h3%5D%20at%20ha%20hw%20%E2%8A%A2%29%20%3C%3B%3E%0A%20%20%20%20%28try%20simp%20only%20%5BWord.wt%2C%20nz_zero%2C%20nz_of_ne%2C%20h0%2C%20h1%2C%20h2%2C%20h3%2C%20ne_eq%2C%20not_false_eq_true%5D%20at%20hw%29%20%3C%3B%3E%0A%20%20%20%20%28try%20simp%20only%20%5BWord.wt%2C%20nz_zero%2C%20nz_of_ne%2C%20h0%2C%20h1%2C%20h2%2C%20h3%2C%20ne_eq%2C%20not_false_eq_true%5D%29%20%3C%3B%3E%0A%20%20%20%20first%0A%20%20%20%20%7C%20omega%0A%20%20%20%20%7C%20exact%20absurd%20rfl%20ha%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20wt_apply_single%20mixMat%20h0%20_%20%28single0%20a0%29%5D%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20wt_apply_single%20mixMat%20h1%20_%20%28single1%20a1%29%5D%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20wt_apply_single%20mixMat%20h2%20_%20%28single2%20a2%29%5D%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20wt_apply_single%20mixMat%20h3%20_%20%28single3%20a3%29%5D%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20%E2%86%90%20%28pair_scale%20h0%20a1%29.1%2C%20Mat.apply_scale%2C%20Word.wt_scale%20h0%5D%0A%20%20%20%20%20%20%20have%20%3A%3D%20%28mix_pair_spec%20%28inv_mul_ne_zero%20h0%20h1%29%29.1%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20%E2%86%90%20%28pair_scale%20h0%20a2%29.2.1%2C%20Mat.apply_scale%2C%20Word.wt_scale%20h0%5D%0A%20%20%20%20%20%20%20have%20%3A%3D%20%28mix_pair_spec%20%28inv_mul_ne_zero%20h0%20h2%29%29.2.1%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20%E2%86%90%20%28pair_scale%20h0%20a3%29.2.2.1%2C%20Mat.apply_scale%2C%20Word.wt_scale%20h0%5D%0A%20%20%20%20%20%20%20have%20%3A%3D%20%28mix_pair_spec%20%28inv_mul_ne_zero%20h0%20h3%29%29.2.2.1%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20%E2%86%90%20%28pair_scale%20h1%20a2%29.2.2.2.1%2C%20Mat.apply_scale%2C%20Word.wt_scale%20h1%5D%0A%20%20%20%20%20%20%20have%20%3A%3D%20%28mix_pair_spec%20%28inv_mul_ne_zero%20h1%20h2%29%29.2.2.2.1%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20%E2%86%90%20%28pair_scale%20h1%20a3%29.2.2.2.2.1%2C%20Mat.apply_scale%2C%20Word.wt_scale%20h1%5D%0A%20%20%20%20%20%20%20have%20%3A%3D%20%28mix_pair_spec%20%28inv_mul_ne_zero%20h1%20h3%29%29.2.2.2.2.1%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5B%E2%86%90%20Word.wt%2C%20%E2%86%90%20%28pair_scale%20h2%20a3%29.2.2.2.2.2%2C%20Mat.apply_scale%2C%20Word.wt_scale%20h2%5D%0A%20%20%20%20%20%20%20have%20%3A%3D%20%28mix_pair_spec%20%28inv_mul_ne_zero%20h2%20h3%29%29.2.2.2.2.2%3B%20omega%29%0A%0A%2F--%20A%20column%20of%20weight%20one%20is%20sent%20by%20%60m%60%20to%20a%20multiple%20of%20one%20of%20%60m%60%27s%20columns.%20-%2F%0Atheorem%20wt_apply_of_wt_one%20%28m%20%3A%20Mat%29%0A%20%20%20%20%28hm%20%3A%20%28m.apply%20%E2%9F%A81%2C%200%2C%200%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%20%28m.apply%20%E2%9F%A80%2C%201%2C%200%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%0A%20%20%20%20%20%20%28m.apply%20%E2%9F%A80%2C%200%2C%201%2C%200%E2%9F%A9%29.wt%20%3D%204%20%E2%88%A7%20%28m.apply%20%E2%9F%A80%2C%200%2C%200%2C%201%E2%9F%A9%29.wt%20%3D%204%29%0A%20%20%20%20%28b%20%3A%20Word%29%20%28hb%20%3A%20b.wt%20%3D%201%29%20%3A%20%28m.apply%20b%29.wt%20%3D%204%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8m0%2C%20m1%2C%20m2%2C%20m3%E2%9F%A9%20%3A%3D%20hm%0A%20%20obtain%20%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%20%3A%3D%20b%0A%20%20by_cases%20h0%20%3A%20a0%20%3D%200%20%3C%3B%3E%20by_cases%20h1%20%3A%20a1%20%3D%200%20%3C%3B%3E%20by_cases%20h2%20%3A%20a2%20%3D%200%20%3C%3B%3E%20by_cases%20h3%20%3A%20a3%20%3D%200%20%3C%3B%3E%0A%20%20%20%20%28try%20simp%20only%20%5Bh0%2C%20h1%2C%20h2%2C%20h3%5D%20at%20hb%20%E2%8A%A2%29%20%3C%3B%3E%0A%20%20%20%20%28try%20simp%20only%20%5BWord.wt%2C%20nz_zero%2C%20nz_of_ne%2C%20h0%2C%20h1%2C%20h2%2C%20h3%2C%20ne_eq%2C%20not_false_eq_true%5D%20at%20hb%29%20%3C%3B%3E%0A%20%20%20%20first%0A%20%20%20%20%7C%20omega%0A%20%20%20%20%7C%20%28rw%20%5Bwt_apply_single%20m%20h0%20_%20%28single0%20a0%29%5D%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5Bwt_apply_single%20m%20h1%20_%20%28single1%20a1%29%5D%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5Bwt_apply_single%20m%20h2%20_%20%28single2%20a2%29%5D%3B%20omega%29%0A%20%20%20%20%7C%20%28rw%20%5Bwt_apply_single%20m%20h3%20_%20%28single3%20a3%29%5D%3B%20omega%29%0A%0Atheorem%20invMixMat_apply_mixMat_apply%20%28a%20%3A%20Word%29%20%3A%20invMixMat.apply%20%28mixMat.apply%20a%29%20%3D%20a%20%3A%3D%20by%0A%20%20rw%20%5BMat.apply_apply%2C%20invMixMat_mul_mixMat%2C%20Mat.one_apply%5D%0A%0Atheorem%20Mat.apply_zero%20%28m%20%3A%20Mat%29%20%3A%20m.apply%200%20%3D%200%20%3A%3D%20by%0A%20%20simp%20%5BMat.apply%2C%20dot%2C%20mul_zero%5D%0A%0A%2F--%20Columns%20of%20weight%20three%20or%20four%3A%20if%20the%20output%20had%20weight%20at%20most%20one%2C%20the%20input%20would%20be%20a%0Amultiple%20of%20a%20column%20of%20%60InvMixColumns%60%2C%20which%20has%20weight%20four.%20-%2F%0Atheorem%20branch_high%20%28a%20%3A%20Word%29%20%28hw%20%3A%203%20%E2%89%A4%20a.wt%29%20%3A%205%20%E2%89%A4%20a.wt%20%2B%20%28mixMat.apply%20a%29.wt%20%3A%3D%20by%0A%20%20have%20hle%20%3A%20a.wt%20%E2%89%A4%204%20%3A%3D%20by%0A%20%20%20%20have%20%3A%3D%20nz_le%20a.b0%3B%20have%20%3A%3D%20nz_le%20a.b1%3B%20have%20%3A%3D%20nz_le%20a.b2%3B%20have%20%3A%3D%20nz_le%20a.b3%0A%20%20%20%20unfold%20Word.wt%3B%20omega%0A%20%20rcases%20Nat.lt_or_ge%20%28mixMat.apply%20a%29.wt%202%20with%20hb%20%7C%20hb%0A%20%20%C2%B7%20rcases%20Nat.lt_or_ge%20%28mixMat.apply%20a%29.wt%201%20with%20hb%27%20%7C%20hb%27%0A%20%20%20%20%C2%B7%20have%20h0%20%3A%20mixMat.apply%20a%20%3D%200%20%3A%3D%20Word.wt_eq_zero.mp%20%28by%20omega%29%0A%20%20%20%20%20%20have%20%3A%20a%20%3D%200%20%3A%3D%20by%20rw%20%5B%E2%86%90%20invMixMat_apply_mixMat_apply%20a%2C%20h0%2C%20Mat.apply_zero%5D%0A%20%20%20%20%20%20subst%20this%3B%20simp%20%5BWord.wt%5D%20at%20hw%0A%20%20%20%20%C2%B7%20have%20%3A%3D%20wt_apply_of_wt_one%20invMixMat%20invMix_units%20_%20%28by%20omega%20%3A%20%28mixMat.apply%20a%29.wt%20%3D%201%29%0A%20%20%20%20%20%20rw%20%5BinvMixMat_apply_mixMat_apply%5D%20at%20this%0A%20%20%20%20%20%20omega%0A%20%20%C2%B7%20omega%0A%0A%2F-%21%20%23%23%20The%20branch%20number%20-%2F%0A%0A%2F--%20The%20branch%20number%20of%20%60MixColumns%60%20is%20at%20least%205%3A%20a%20nonzero%20column%20and%20its%20image%20have%20at%20least%0Afive%20nonzero%20bytes%20between%20them.%20-%2F%0Atheorem%20branch_mixColumn%20%28a%20%3A%20Word%29%20%28ha%20%3A%20a%20%E2%89%A0%200%29%20%3A%205%20%E2%89%A4%20a.wt%20%2B%20%28mixColumn%20a%29.wt%20%3A%3D%20by%0A%20%20rw%20%5BmixColumn_eq%5D%0A%20%20rcases%20Nat.lt_or_ge%20a.wt%203%20with%20h%20%7C%20h%0A%20%20%C2%B7%20exact%20branch_low%20a%20ha%20%28by%20omega%29%0A%20%20%C2%B7%20exact%20branch_high%20a%20h%0A%0A%2F--%20and%20exactly%205%3A%20one%20changed%20byte%20changes%20all%20four.%20-%2F%0Atheorem%20branch_mixColumn_tight%20%3A%20%E2%88%83%20a%20%3A%20Word%2C%20a%20%E2%89%A0%200%20%E2%88%A7%20a.wt%20%2B%20%28mixColumn%20a%29.wt%20%3D%205%20%3A%3D%0A%20%20%E2%9F%A8%E2%9F%A81%2C%200%2C%200%2C%200%E2%9F%A9%2C%20by%20decide%2C%20by%20decide%20%2Bkernel%E2%9F%A9%0A%0A%2F--%20The%20same%20for%20differences%3A%20two%20different%20columns%2C%20and%20their%20images%2C%20differ%20in%20at%20least%20five%20bytes%0Abetween%20them.%20This%20is%20the%20form%20the%20wide-trail%20argument%20uses.%20-%2F%0Atheorem%20branch_mixColumn_diff%20%7Ba%20b%20%3A%20Word%7D%20%28h%20%3A%20a%20%E2%89%A0%20b%29%20%3A%0A%20%20%20%205%20%E2%89%A4%20%28a%20%5E%5E%5E%20b%29.wt%20%2B%20%28mixColumn%20a%20%5E%5E%5E%20mixColumn%20b%29.wt%20%3A%3D%20by%0A%20%20rw%20%5B%E2%86%90%20mixColumn_xor%5D%0A%20%20apply%20branch_mixColumn%0A%20%20intro%20h%27%0A%20%20apply%20h%0A%20%20obtain%20%E2%9F%A8a0%2C%20a1%2C%20a2%2C%20a3%E2%9F%A9%20%3A%3D%20a%0A%20%20obtain%20%E2%9F%A8b0%2C%20b1%2C%20b2%2C%20b3%E2%9F%A9%20%3A%3D%20b%0A%20%20simp%20only%20%5BWord.xor_def%2C%20Word.zero_def%2C%20Word.mk.injEq%2C%20UInt8.xor_eq_zero_iff%5D%20at%20h%27%0A%20%20simp%20%5Bh%27%5D%0A%0A%2F--%20%60InvMixColumns%60%20has%20branch%20number%205%20too.%20-%2F%0Atheorem%20branch_invMixColumn%20%28a%20%3A%20Word%29%20%28ha%20%3A%20a%20%E2%89%A0%200%29%20%3A%205%20%E2%89%A4%20a.wt%20%2B%20%28invMixColumn%20a%29.wt%20%3A%3D%20by%0A%20%20have%20hc%20%3A%20invMixColumn%20a%20%E2%89%A0%200%20%3A%3D%20by%0A%20%20%20%20intro%20h%3B%20apply%20ha%3B%20rw%20%5B%E2%86%90%20mixColumn_invMixColumn%20a%2C%20h%2C%20mixColumn_eq%2C%20Mat.apply_zero%5D%0A%20%20have%20%3A%3D%20branch_mixColumn%20_%20hc%0A%20%20rw%20%5BmixColumn_invMixColumn%5D%20at%20this%0A%20%20omega%0A%0Aend%20AES%0A">Run this file in the Lean 4 web editor ↗</a></p></header>
+<nav><strong>Proofs</strong> <a href="#p31">nz_of_ne</a> <a href="#p32">nz_le</a> <a href="#p34">Word.wt_eq_zero</a> <a href="#p42">dot_scale</a> <a href="#p45">Mat.apply_scale</a> <a href="#p48">nz_mul</a> <a href="#p54">Word.wt_scale</a> <a href="#p64">wt_apply_single</a> <a href="#p68">single0</a> <a href="#p70">single1</a> <a href="#p72">single2</a> <a href="#p74">single3</a> <a href="#p78">mix_units</a> <a href="#p80">invMix_units</a> <a href="#p85">mix_pairs</a> <a href="#p91">mix_pair_spec</a> <a href="#p98">pair_scale</a> <a href="#p111">branch_low</a> <a href="#p139">wt_apply_of_wt_one</a> <a href="#p155">invMixMat_apply_mixMat_apply</a> <a href="#p158">Mat.apply_zero</a> <a href="#p163">branch_high</a> <a href="#p181">branch_mixColumn</a> <a href="#p188">branch_mixColumn_tight</a> <a href="#p193">branch_mixColumn_diff</a> <a href="#p205">branch_invMixColumn</a></nav>
+<section class="proof" id="p31">
+<h2>nz_of_ne <span class="line">line 32</span></h2>
+<pre class="code">theorem nz_of_ne {b : Byte} (h : b ≠ 0) : nz b = 1 := by simp [nz, h]</pre>
+<p class="words">In words: nz b equals 1</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">b : Byte
+h : b ≠ 0
+⊢ nz b = 1</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [nz, h]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p32">
+<h2>nz_le <span class="line">line 33</span></h2>
+<pre class="code">theorem nz_le (b : Byte) : nz b ≤ 1 := by unfold nz; split &lt;;&gt; omega</pre>
+<p class="words">In words: nz b is at most 1</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">b : Byte
+⊢ nz b ≤ 1</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold nz; split &lt;;&gt; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p34">
+<h2>Word.wt_eq_zero <span class="line">line 35</span></h2>
+<pre class="code">theorem Word.wt_eq_zero {w : Word} : w.wt = 0 ↔ w = 0 := by</pre>
+<p class="words">In words: w.wt equals 0 exactly when w equals 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ w.wt = 0 ↔ w = 0</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨a, b, c, d⟩ := w</code><span class="change">+a  +b  +c  +d  −w</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a b c d : Byte
+⊢ { b0 := a, b1 := b, b2 := c, b3 := d }.wt = 0 ↔ { b0 := a, b1 := b, b2 := c, b3 := d } = 0</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [wt, nz, zero_def, mk.injEq]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">a b c d : Byte
+⊢ ((((if a = 0 then 0 else 1) + if b = 0 then 0 else 1) + if c = 0 then 0 else 1) + if d = 0 then 0 else 1) = 0 ↔
+  a = 0 ∧ b = 0 ∧ c = 0 ∧ d = 0</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>split &lt;;&gt; split &lt;;&gt; split &lt;;&gt; split &lt;;&gt; simp_all</code><span class="change">goals accomplished</span></div><p class="explain">Splits a goal that contains if-then-else or match into its cases.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p42">
+<h2>dot_scale <span class="line">line 43</span></h2>
+<pre class="code">theorem dot_scale (r : Word) (l : Byte) (w : Word) : dot r (w.scale l) = mul l (dot r w) := by</pre>
+<p class="words">In words: dot r (Word.scale l w) equals mul l (dot r w)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">r : Word
+l : Byte
+w : Word
+⊢ dot r (Word.scale l w) = mul l (dot r w)</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [dot, Word.scale, Word.map, mul_xor, mul_left_comm l]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p45">
+<h2>Mat.apply_scale <span class="line">line 46</span></h2>
+<pre class="code">theorem Mat.apply_scale (m : Mat) (l : Byte) (w : Word) : m.apply (w.scale l) = (m.apply w).scale l := by</pre>
+<p class="words">In words: m.apply (Word.scale l w) equals Word.scale l (m.apply w)</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">m : Mat
+l : Byte
+w : Word
+⊢ m.apply (Word.scale l w) = Word.scale l (m.apply w)</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [Mat.apply, dot_scale]; rfl</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p48">
+<h2>nz_mul <span class="line">line 49</span></h2>
+<pre class="code">theorem nz_mul {l : Byte} (hl : l ≠ 0) (b : Byte) : nz (mul l b) = nz b := by</pre>
+<p class="words">In words: nz (mul l b) equals nz b</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">l : Byte
+hl : l ≠ 0
+b : Byte
+⊢ nz (mul l b) = nz b</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>unfold nz</code><span class="change">goal rewritten</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><pre class="goal">l : Byte
+hl : l ≠ 0
+b : Byte
+⊢ (if mul l b = 0 then 0 else 1) = if b = 0 then 0 else 1</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>by_cases hb : b = 0</code><span class="change">+1 goal  +hb</span></div><p class="explain">Splits into two cases: the statement holds, or it does not.</p><div class="state"><pre class="goal">case pos
+l : Byte
+hl : l ≠ 0
+b : Byte
+hb : b = 0
+⊢ (if mul l b = 0 then 0 else 1) = if b = 0 then 0 else 1</pre><pre class="goal">case neg
+l : Byte
+hl : l ≠ 0
+b : Byte
+hb : &#172;b = 0
+⊢ (if mul l b = 0 then 0 else 1) = if b = 0 then 0 else 1</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; simp [hb, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; simp [hb, mul_ne_zero hl hb]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p54">
+<h2>Word.wt_scale <span class="line">line 55</span></h2>
+<pre class="code">theorem Word.wt_scale {l : Byte} (hl : l ≠ 0) (w : Word) : (w.scale l).wt = w.wt := by</pre>
+<p class="words">In words: (scale l w).wt equals w.wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">l : Byte
+hl : l ≠ 0
+w : Word
+⊢ (scale l w).wt = w.wt</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [wt, scale, map, nz_mul hl]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p64">
+<h2>wt_apply_single <span class="line">line 65</span></h2>
+<pre class="code">theorem wt_apply_single (m : Mat) {x : Byte} (hx : x ≠ 0) (u : Word) (hu : u.scale x = v) :
+    (m.apply v).wt = (m.apply u).wt := by</pre>
+<p class="words">In words: (m.apply v).wt equals (m.apply u).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">v : Word
+m : Mat
+x : Byte
+hx : x ≠ 0
+u : Word
+hu : Word.scale x u = v
+⊢ (m.apply v).wt = (m.apply u).wt</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [← hu, Mat.apply_scale, Word.wt_scale hx]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p68">
+<h2>single0 <span class="line">line 69</span></h2>
+<pre class="code">theorem single0 (x : Byte) : (⟨1, 0, 0, 0⟩ : Word).scale x = ⟨x, 0, 0, 0⟩ := by</pre>
+<p class="words">In words: Word.scale x { b0 := 1, b1 := 0, b2 := 0, b3 := 0 } equals { b0 := x, b1 := 0, b2 := 0, b3 := 0 }</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x : Byte
+⊢ Word.scale x { b0 := 1, b1 := 0, b2 := 0, b3 := 0 } = { b0 := x, b1 := 0, b2 := 0, b3 := 0 }</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [Word.scale, Word.map, mul_one, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p70">
+<h2>single1 <span class="line">line 71</span></h2>
+<pre class="code">theorem single1 (x : Byte) : (⟨0, 1, 0, 0⟩ : Word).scale x = ⟨0, x, 0, 0⟩ := by</pre>
+<p class="words">In words: Word.scale x { b0 := 0, b1 := 1, b2 := 0, b3 := 0 } equals { b0 := 0, b1 := x, b2 := 0, b3 := 0 }</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x : Byte
+⊢ Word.scale x { b0 := 0, b1 := 1, b2 := 0, b3 := 0 } = { b0 := 0, b1 := x, b2 := 0, b3 := 0 }</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [Word.scale, Word.map, mul_one, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p72">
+<h2>single2 <span class="line">line 73</span></h2>
+<pre class="code">theorem single2 (x : Byte) : (⟨0, 0, 1, 0⟩ : Word).scale x = ⟨0, 0, x, 0⟩ := by</pre>
+<p class="words">In words: Word.scale x { b0 := 0, b1 := 0, b2 := 1, b3 := 0 } equals { b0 := 0, b1 := 0, b2 := x, b3 := 0 }</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x : Byte
+⊢ Word.scale x { b0 := 0, b1 := 0, b2 := 1, b3 := 0 } = { b0 := 0, b1 := 0, b2 := x, b3 := 0 }</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [Word.scale, Word.map, mul_one, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p74">
+<h2>single3 <span class="line">line 75</span></h2>
+<pre class="code">theorem single3 (x : Byte) : (⟨0, 0, 0, 1⟩ : Word).scale x = ⟨0, 0, 0, x⟩ := by</pre>
+<p class="words">In words: Word.scale x { b0 := 0, b1 := 0, b2 := 0, b3 := 1 } equals { b0 := 0, b1 := 0, b2 := 0, b3 := x }</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x : Byte
+⊢ Word.scale x { b0 := 0, b1 := 0, b2 := 0, b3 := 1 } = { b0 := 0, b1 := 0, b2 := 0, b3 := x }</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [Word.scale, Word.map, mul_one, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p78">
+<h2>mix_units <span class="line">line 79</span></h2>
+<pre class="code">theorem mix_units : (mixMat.apply ⟨1, 0, 0, 0⟩).wt = 4 ∧ (mixMat.apply ⟨0, 1, 0, 0⟩).wt = 4 ∧
+    (mixMat.apply ⟨0, 0, 1, 0⟩).wt = 4 ∧ (mixMat.apply ⟨0, 0, 0, 1⟩).wt = 4 := by decide +kernel</pre>
+<p class="words">In words: (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt equals 4 and (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt equals 4 and (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt equals 4 and (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt equals 4</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">⊢ (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4 ∧
+  (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4 ∧
+    (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4 ∧
+      (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">Proves a statement by computing its answer, for statements about specific values (2 + 2 = 4, 7 is prime…).</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p80">
+<h2>invMix_units <span class="line">line 81</span></h2>
+<pre class="code">theorem invMix_units : (invMixMat.apply ⟨1, 0, 0, 0⟩).wt = 4 ∧ (invMixMat.apply ⟨0, 1, 0, 0⟩).wt = 4 ∧
+    (invMixMat.apply ⟨0, 0, 1, 0⟩).wt = 4 ∧ (invMixMat.apply ⟨0, 0, 0, 1⟩).wt = 4 := by decide +kernel</pre>
+<p class="words">In words: (invMixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt equals 4 and (invMixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt equals 4 and (invMixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt equals 4 and (invMixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt equals 4</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">⊢ (invMixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4 ∧
+  (invMixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4 ∧
+    (invMixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4 ∧
+      (invMixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">Proves a statement by computing its answer, for statements about specific values (2 + 2 = 4, 7 is prime…).</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p85">
+<h2>mix_pairs <span class="line">line 86</span></h2>
+<pre class="code">theorem mix_pairs : allBytes (fun μ =&gt; μ == 0 || (
+    3 ≤ (mixMat.apply ⟨1, μ, 0, 0⟩).wt &amp;&amp; 3 ≤ (mixMat.apply ⟨1, 0, μ, 0⟩).wt &amp;&amp;
+    3 ≤ (mixMat.apply ⟨1, 0, 0, μ⟩).wt &amp;&amp; 3 ≤ (mixMat.apply ⟨0, 1, μ, 0⟩).wt &amp;&amp;
+    3 ≤ (mixMat.apply ⟨0, 1, 0, μ⟩).wt &amp;&amp; 3 ≤ (mixMat.apply ⟨0, 0, 1, μ⟩).wt)) = true := by</pre>
+<p class="words">In words: (allBytes fun μ =&gt; μ == 0 || decide (3 ≤ (mixMat.apply { b0 := 1, b1 := μ, b2 := 0, b3 := 0 }).wt) &amp;&amp; decide (3 ≤ (mixMat.apply { b0 := 1, b1 := 0, b2 := μ, b3 := 0 }).wt) &amp;&amp; decide (3 ≤ (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := μ }).wt) &amp;&amp; decide (3 ≤ (mixMat.apply { b0 := 0, b1 := 1, b2 := μ, b3 := 0 }).wt) &amp;&amp; decide (3 ≤ (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := μ }).wt) &amp;&amp; decide (3 ≤ (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := μ }).wt)) equals true</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">⊢ (allBytes fun μ =&gt;
+    μ == 0 ||
+      decide (3 ≤ (mixMat.apply { b0 := 1, b1 := μ, b2 := 0, b3 := 0 }).wt) &amp;&amp;
+                decide (3 ≤ (mixMat.apply { b0 := 1, b1 := 0, b2 := μ, b3 := 0 }).wt) &amp;&amp;
+              decide (3 ≤ (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := μ }).wt) &amp;&amp;
+            decide (3 ≤ (mixMat.apply { b0 := 0, b1 := 1, b2 := μ, b3 := 0 }).wt) &amp;&amp;
+          decide (3 ≤ (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := μ }).wt) &amp;&amp;
+        decide (3 ≤ (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := μ }).wt)) =
+  true</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">Proves a statement by computing its answer, for statements about specific values (2 + 2 = 4, 7 is prime…).</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p91">
+<h2>mix_pair_spec <span class="line">line 92</span></h2>
+<pre class="code">theorem mix_pair_spec {μ : Byte} (h : μ ≠ 0) :
+    3 ≤ (mixMat.apply ⟨1, μ, 0, 0⟩).wt ∧ 3 ≤ (mixMat.apply ⟨1, 0, μ, 0⟩).wt ∧
+    3 ≤ (mixMat.apply ⟨1, 0, 0, μ⟩).wt ∧ 3 ≤ (mixMat.apply ⟨0, 1, μ, 0⟩).wt ∧
+    3 ≤ (mixMat.apply ⟨0, 1, 0, μ⟩).wt ∧ 3 ≤ (mixMat.apply ⟨0, 0, 1, μ⟩).wt := by</pre>
+<p class="words">In words: 3 is at most (mixMat.apply { b0 := 1, b1 := μ, b2 := 0, b3 := 0 }).wt and 3 is at most (mixMat.apply { b0 := 1, b1 := 0, b2 := μ, b3 := 0 }).wt and 3 is at most (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := μ }).wt and 3 is at most (mixMat.apply { b0 := 0, b1 := 1, b2 := μ, b3 := 0 }).wt and 3 is at most (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := μ }).wt and 3 is at most (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := μ }).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">μ : Byte
+h : μ ≠ 0
+⊢ 3 ≤ (mixMat.apply { b0 := 1, b1 := μ, b2 := 0, b3 := 0 }).wt ∧
+  3 ≤ (mixMat.apply { b0 := 1, b1 := 0, b2 := μ, b3 := 0 }).wt ∧
+    3 ≤ (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := μ }).wt ∧
+      3 ≤ (mixMat.apply { b0 := 0, b1 := 1, b2 := μ, b3 := 0 }).wt ∧
+        3 ≤ (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := μ }).wt ∧
+          3 ≤ (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := μ }).wt</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simpa [h, and_assoc] using allBytes_spec mix_pairs μ</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p98">
+<h2>pair_scale <span class="line">line 99</span></h2>
+<pre class="code">theorem pair_scale {x : Byte} (hx : x ≠ 0) (y : Byte) :
+    (⟨1, mul (inv x) y, 0, 0⟩ : Word).scale x = ⟨x, y, 0, 0⟩ ∧
+    (⟨1, 0, mul (inv x) y, 0⟩ : Word).scale x = ⟨x, 0, y, 0⟩ ∧
+    (⟨1, 0, 0, mul (inv x) y⟩ : Word).scale x = ⟨x, 0, 0, y⟩ ∧
+    (⟨0, 1, mul (inv x) y, 0⟩ : Word).scale x = ⟨0, x, y, 0⟩ ∧
+    (⟨0, 1, 0, mul (inv x) y⟩ : Word).scale x = ⟨0, x, 0, y⟩ ∧
+    (⟨0, 0, 1, mul (inv x) y⟩ : Word).scale x = ⟨0, 0, x, y⟩ := by</pre>
+<p class="words">In words: Word.scale x { b0 := 1, b1 := mul (inv x) y, b2 := 0, b3 := 0 } equals { b0 := x, b1 := y, b2 := 0, b3 := 0 } and Word.scale x { b0 := 1, b1 := 0, b2 := mul (inv x) y, b3 := 0 } equals { b0 := x, b1 := 0, b2 := y, b3 := 0 } and Word.scale x { b0 := 1, b1 := 0, b2 := 0, b3 := mul (inv x) y } equals { b0 := x, b1 := 0, b2 := 0, b3 := y } and Word.scale x { b0 := 0, b1 := 1, b2 := mul (inv x) y, b3 := 0 } equals { b0 := 0, b1 := x, b2 := y, b3 := 0 } and Word.scale x { b0 := 0, b1 := 1, b2 := 0, b3 := mul (inv x) y } equals { b0 := 0, b1 := x, b2 := 0, b3 := y } and Word.scale x { b0 := 0, b1 := 0, b2 := 1, b3 := mul (inv x) y } equals { b0 := 0, b1 := 0, b2 := x, b3 := y }</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">x : Byte
+hx : x ≠ 0
+y : Byte
+⊢ Word.scale x { b0 := 1, b1 := mul (inv x) y, b2 := 0, b3 := 0 } = { b0 := x, b1 := y, b2 := 0, b3 := 0 } ∧
+  Word.scale x { b0 := 1, b1 := 0, b2 := mul (inv x) y, b3 := 0 } = { b0 := x, b1 := 0, b2 := y, b3 := 0 } ∧
+    Word.scale x { b0 := 1, b1 := 0, b2 := 0, b3 := mul (inv x) y } = { b0 := x, b1 := 0, b2 := 0, b3 := y } ∧
+      Word.scale x { b0 := 0, b1 := 1, b2 := mul (inv x) y, b3 := 0 } = { b0 := 0, b1 := x, b2 := y, b3 := 0 } ∧
+        Word.scale x { b0 := 0, b1 := 1, b2 := 0, b3 := mul (inv x) y } = { b0 := 0, b1 := x, b2 := 0, b3 := y } ∧
+          Word.scale x { b0 := 0, b1 := 0, b2 := 1, b3 := mul (inv x) y } = { b0 := 0, b1 := 0, b2 := x, b3 := y }</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [Word.scale, Word.map, mul_one, mul_zero, mul_inv_mul hx]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p111">
+<h2>branch_low <span class="line">line 112</span></h2>
+<pre class="code">theorem branch_low (a : Word) (ha : a ≠ 0) (hw : a.wt ≤ 2) : 5 ≤ a.wt + (mixMat.apply a).wt := by</pre>
+<p class="words">In words: 5 is at most a.wt + (mixMat.apply a).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Word
+ha : a ≠ 0
+hw : a.wt ≤ 2
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨a0, a1, a2, a3⟩ := a</code><span class="change">+a0  +a1  +a2  +a3  −a  ~ha  ~hw</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 : Byte
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+hw : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨m0, m1, m2, m3⟩ := mix_units</code><span class="change">+m0  +m1  +m2  +m3</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 : Byte
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+hw : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt ≤ 2
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>by_cases h0 : a0 = 0 &lt;;&gt; by_cases h1 : a1 = 0 &lt;;&gt; by_cases h2 : a2 = 0 &lt;;&gt; by_cases h3 : a3 = 0 &lt;;&gt;</code><span class="change">+15 goals  +h0  +h1  +h2  +h3</span></div><p class="explain">Splits into two cases: the statement holds, or it does not.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>(try simp only [h0, h1, h2, h3] at ha hw ⊢) &lt;;&gt;</code><span class="change">~ha  ~hw</span></div><div class="state"><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := 0, b3 := 0 } ≠ 0
+hw : { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := 0, b3 := a3 } ≠ 0
+hw : { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := a2, b3 := 0 } ≠ 0
+hw : { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := a2, b3 := a3 } ≠ 0
+hw : { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := 0, b3 := 0 } ≠ 0
+hw : { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := 0, b3 := a3 } ≠ 0
+hw : { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := a2, b3 := 0 } ≠ 0
+hw : { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+hw : { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := 0, b3 := 0 } ≠ 0
+hw : { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := 0, b3 := a3 } ≠ 0
+hw : { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := a2, b3 := 0 } ≠ 0
+hw : { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := a2, b3 := a3 } ≠ 0
+hw : { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := 0, b3 := 0 } ≠ 0
+hw : { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := 0, b3 := a3 } ≠ 0
+hw : { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := 0 } ≠ 0
+hw : { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }.wt ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+hw : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt ≤ 2
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>(try simp only [Word.wt, nz_zero, nz_of_ne, h0, h1, h2, h3, ne_eq, not_false_eq_true] at hw) &lt;;&gt;</code><span class="change">~hw</span></div><div class="state"><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := 0, b3 := 0 } ≠ 0
+hw : 0 + 0 + 0 + 0 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := 0, b3 := a3 } ≠ 0
+hw : 0 + 0 + 0 + 1 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := a2, b3 := 0 } ≠ 0
+hw : 0 + 0 + 1 + 0 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := a2, b3 := a3 } ≠ 0
+hw : 0 + 0 + 1 + 1 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := 0, b3 := 0 } ≠ 0
+hw : 0 + 1 + 0 + 0 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := 0, b3 := a3 } ≠ 0
+hw : 0 + 1 + 0 + 1 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := a2, b3 := 0 } ≠ 0
+hw : 0 + 1 + 1 + 0 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+hw : 0 + 1 + 1 + 1 ≤ 2
+⊢ 5 ≤ { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := 0, b3 := 0 } ≠ 0
+hw : 1 + 0 + 0 + 0 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := 0, b3 := a3 } ≠ 0
+hw : 1 + 0 + 0 + 1 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := a2, b3 := 0 } ≠ 0
+hw : 1 + 0 + 1 + 0 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := a2, b3 := a3 } ≠ 0
+hw : 1 + 0 + 1 + 1 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := 0, b3 := 0 } ≠ 0
+hw : 1 + 1 + 0 + 0 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := 0, b3 := a3 } ≠ 0
+hw : 1 + 1 + 0 + 1 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).wt</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := 0 } ≠ 0
+hw : 1 + 1 + 1 + 0 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).wt</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hw : 1 + 1 + 1 + 1 ≤ 2
+⊢ 5 ≤ { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt + (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>(try simp only [Word.wt, nz_zero, nz_of_ne, h0, h1, h2, h3, ne_eq, not_false_eq_true]) &lt;;&gt;</code><span class="change">goal rewritten</span></div><div class="state"><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := 0, b3 := 0 } ≠ 0
+hw : 0 + 0 + 0 + 0 ≤ 2
+⊢ 5 ≤
+  0 + 0 + 0 + 0 +
+    (nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := 0, b3 := a3 } ≠ 0
+hw : 0 + 0 + 0 + 1 ≤ 2
+⊢ 5 ≤
+  0 + 0 + 0 + 1 +
+    (nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).b3)</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := a2, b3 := 0 } ≠ 0
+hw : 0 + 0 + 1 + 0 ≤ 2
+⊢ 5 ≤
+  0 + 0 + 1 + 0 +
+    (nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := 0, b2 := a2, b3 := a3 } ≠ 0
+hw : 0 + 0 + 1 + 1 ≤ 2
+⊢ 5 ≤
+  0 + 0 + 1 + 1 +
+    (nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).b3)</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := 0, b3 := 0 } ≠ 0
+hw : 0 + 1 + 0 + 0 ≤ 2
+⊢ 5 ≤
+  0 + 1 + 0 + 0 +
+    (nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := 0, b3 := a3 } ≠ 0
+hw : 0 + 1 + 0 + 1 ≤ 2
+⊢ 5 ≤
+  0 + 1 + 0 + 1 +
+    (nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).b3)</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := a2, b3 := 0 } ≠ 0
+hw : 0 + 1 + 1 + 0 ≤ 2
+⊢ 5 ≤
+  0 + 1 + 1 + 0 +
+    (nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := 0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+hw : 0 + 1 + 1 + 1 ≤ 2
+⊢ 5 ≤
+  0 + 1 + 1 + 1 +
+    (nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).b3)</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := 0, b3 := 0 } ≠ 0
+hw : 1 + 0 + 0 + 0 ≤ 2
+⊢ 5 ≤
+  1 + 0 + 0 + 0 +
+    (nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := 0, b3 := a3 } ≠ 0
+hw : 1 + 0 + 0 + 1 ≤ 2
+⊢ 5 ≤
+  1 + 0 + 0 + 1 +
+    (nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).b3)</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := a2, b3 := 0 } ≠ 0
+hw : 1 + 0 + 1 + 0 ≤ 2
+⊢ 5 ≤
+  1 + 0 + 1 + 0 +
+    (nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := 0, b2 := a2, b3 := a3 } ≠ 0
+hw : 1 + 0 + 1 + 1 ≤ 2
+⊢ 5 ≤
+  1 + 0 + 1 + 1 +
+    (nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).b3)</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := 0, b3 := 0 } ≠ 0
+hw : 1 + 1 + 0 + 0 ≤ 2
+⊢ 5 ≤
+  1 + 1 + 0 + 0 +
+    (nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := 0, b3 := a3 } ≠ 0
+hw : 1 + 1 + 0 + 1 ≤ 2
+⊢ 5 ≤
+  1 + 1 + 0 + 1 +
+    (nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).b3)</pre><pre class="goal">case pos
+a0 a1 a2 a3 : Byte
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := 0 } ≠ 0
+hw : 1 + 1 + 1 + 0 ≤ 2
+⊢ 5 ≤
+  1 + 1 + 1 + 0 +
+    (nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).b3)</pre><pre class="goal">case neg
+a0 a1 a2 a3 : Byte
+ha : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ 0
+m0 : (mixMat.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (mixMat.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (mixMat.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hw : 1 + 1 + 1 + 1 ≤ 2
+⊢ 5 ≤
+  1 + 1 + 1 + 1 +
+    (nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).b0 +
+          nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).b1 +
+        nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).b2 +
+      nz (mixMat.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).b3)</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>first</code><span class="change">continues below</span></div><p class="explain">Tries tactics in order and uses the first that works.</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| omega</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| exact absurd rfl ha</code><span class="change">closed 1 goal  ~h3  ~ha  ~hw</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, wt_apply_single mixMat h0 _ (single0 a0)]; omega)</code><span class="change">closed 1 goal</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, wt_apply_single mixMat h1 _ (single1 a1)]; omega)</code><span class="change">closed 1 goal</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, wt_apply_single mixMat h2 _ (single2 a2)]; omega)</code><span class="change">closed 1 goal</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, wt_apply_single mixMat h3 _ (single3 a3)]; omega)</code><span class="change">closed 1 goal  ~h2  ~ha  ~hw</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, ← (pair_scale h0 a1).1, Mat.apply_scale, Word.wt_scale h0]</code><span class="change">goal rewritten</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := (mix_pair_spec (inv_mul_ne_zero h0 h1)).1; omega)</code><span class="change">closed 1 goal</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, ← (pair_scale h0 a2).2.1, Mat.apply_scale, Word.wt_scale h0]</code><span class="change">goal rewritten</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := (mix_pair_spec (inv_mul_ne_zero h0 h2)).2.1; omega)</code><span class="change">closed 1 goal</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, ← (pair_scale h0 a3).2.2.1, Mat.apply_scale, Word.wt_scale h0]</code><span class="change">goal rewritten</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := (mix_pair_spec (inv_mul_ne_zero h0 h3)).2.2.1; omega)</code><span class="change">closed 1 goal</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, ← (pair_scale h1 a2).2.2.2.1, Mat.apply_scale, Word.wt_scale h1]</code><span class="change">goal rewritten</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := (mix_pair_spec (inv_mul_ne_zero h1 h2)).2.2.2.1; omega)</code><span class="change">closed 1 goal</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, ← (pair_scale h1 a3).2.2.2.2.1, Mat.apply_scale, Word.wt_scale h1]</code><span class="change">goal rewritten</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := (mix_pair_spec (inv_mul_ne_zero h1 h3)).2.2.2.2.1; omega)</code><span class="change">closed 1 goal</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [← Word.wt, ← (pair_scale h2 a3).2.2.2.2.2, Mat.apply_scale, Word.wt_scale h2]</code><span class="change">goal rewritten</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>have := (mix_pair_spec (inv_mul_ne_zero h2 h3)).2.2.2.2.2; omega)</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p139">
+<h2>wt_apply_of_wt_one <span class="line">line 140</span></h2>
+<pre class="code">theorem wt_apply_of_wt_one (m : Mat)
+    (hm : (m.apply ⟨1, 0, 0, 0⟩).wt = 4 ∧ (m.apply ⟨0, 1, 0, 0⟩).wt = 4 ∧
+      (m.apply ⟨0, 0, 1, 0⟩).wt = 4 ∧ (m.apply ⟨0, 0, 0, 1⟩).wt = 4)
+    (b : Word) (hb : b.wt = 1) : (m.apply b).wt = 4 := by</pre>
+<p class="words">In words: (m.apply b).wt equals 4</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">m : Mat
+hm : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4 ∧
+  (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4 ∧
+    (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4 ∧ (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+b : Word
+hb : b.wt = 1
+⊢ (m.apply b).wt = 4</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨m0, m1, m2, m3⟩ := hm</code><span class="change">+m0  +m1  +m2  +m3  −hm</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">m : Mat
+b : Word
+hb : b.wt = 1
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+⊢ (m.apply b).wt = 4</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨a0, a1, a2, a3⟩ := b</code><span class="change">+a0  +a1  +a2  +a3  −b  ~hb</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+hb : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).wt = 4</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>by_cases h0 : a0 = 0 &lt;;&gt; by_cases h1 : a1 = 0 &lt;;&gt; by_cases h2 : a2 = 0 &lt;;&gt; by_cases h3 : a3 = 0 &lt;;&gt;</code><span class="change">+15 goals  +h0  +h1  +h2  +h3</span></div><p class="explain">Splits into two cases: the statement holds, or it does not.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>(try simp only [h0, h1, h2, h3] at hb ⊢) &lt;;&gt;</code><span class="change">~hb</span></div><div class="state"><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hb : { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hb : { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hb : { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }.wt = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+hb : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }.wt = 1
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).wt = 4</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>(try simp only [Word.wt, nz_zero, nz_of_ne, h0, h1, h2, h3, ne_eq, not_false_eq_true] at hb) &lt;;&gt;</code><span class="change">~hb</span></div><div class="state"><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : 0 + 0 + 0 + 0 = 1
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : True
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : True
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hb : 0 + 0 + 1 + 1 = 1
+⊢ (m.apply { b0 := 0, b1 := 0, b2 := a2, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : True
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : 0 + 1 + 0 + 1 = 1
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : 0 + 1 + 1 + 0 = 1
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hb : 0 + 1 + 1 + 1 = 1
+⊢ (m.apply { b0 := 0, b1 := a1, b2 := a2, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : True
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : 1 + 0 + 0 + 1 = 1
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : 1 + 0 + 1 + 0 = 1
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hb : 1 + 0 + 1 + 1 = 1
+⊢ (m.apply { b0 := a0, b1 := 0, b2 := a2, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : a3 = 0
+hb : 1 + 1 + 0 + 0 = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := 0, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : a2 = 0
+h3 : &#172;a3 = 0
+hb : 1 + 1 + 0 + 1 = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := 0, b3 := a3 }).wt = 4</pre><pre class="goal">case pos
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : a3 = 0
+hb : 1 + 1 + 1 + 0 = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := a2, b3 := 0 }).wt = 4</pre><pre class="goal">case neg
+m : Mat
+m0 : (m.apply { b0 := 1, b1 := 0, b2 := 0, b3 := 0 }).wt = 4
+m1 : (m.apply { b0 := 0, b1 := 1, b2 := 0, b3 := 0 }).wt = 4
+m2 : (m.apply { b0 := 0, b1 := 0, b2 := 1, b3 := 0 }).wt = 4
+m3 : (m.apply { b0 := 0, b1 := 0, b2 := 0, b3 := 1 }).wt = 4
+a0 a1 a2 a3 : Byte
+h0 : &#172;a0 = 0
+h1 : &#172;a1 = 0
+h2 : &#172;a2 = 0
+h3 : &#172;a3 = 0
+hb : 1 + 1 + 1 + 1 = 1
+⊢ (m.apply { b0 := a0, b1 := a1, b2 := a2, b3 := a3 }).wt = 4</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>first</code><span class="change">continues below</span></div><p class="explain">Tries tactics in order and uses the first that works.</p></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| omega</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [wt_apply_single m h0 _ (single0 a0)]; omega)</code><span class="change">closed 1 goal</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [wt_apply_single m h1 _ (single1 a1)]; omega)</code><span class="change">closed 1 goal</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>| (rw [wt_apply_single m h2 _ (single2 a2)]; omega)</code><span class="change">closed 1 goal</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>| (rw [wt_apply_single m h3 _ (single3 a3)]; omega)</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p155">
+<h2>invMixMat_apply_mixMat_apply <span class="line">line 156</span></h2>
+<pre class="code">theorem invMixMat_apply_mixMat_apply (a : Word) : invMixMat.apply (mixMat.apply a) = a := by</pre>
+<p class="words">In words: invMixMat.apply (mixMat.apply a) equals a</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Word
+⊢ invMixMat.apply (mixMat.apply a) = a</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [Mat.apply_apply, invMixMat_mul_mixMat, Mat.one_apply]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p158">
+<h2>Mat.apply_zero <span class="line">line 159</span></h2>
+<pre class="code">theorem Mat.apply_zero (m : Mat) : m.apply 0 = 0 := by</pre>
+<p class="words">In words: m.apply 0 equals 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">m : Mat
+⊢ m.apply 0 = 0</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [Mat.apply, dot, mul_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p163">
+<h2>branch_high <span class="line">line 164</span></h2>
+<pre class="code">theorem branch_high (a : Word) (hw : 3 ≤ a.wt) : 5 ≤ a.wt + (mixMat.apply a).wt := by</pre>
+<p class="words">In words: 5 is at most a.wt + (mixMat.apply a).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Word
+hw : 3 ≤ a.wt
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>have hle : a.wt ≤ 4 := by</code><span class="change">goal rewritten</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := nz_le a.b0; have := nz_le a.b1; have := nz_le a.b2; have := nz_le a.b3</code><span class="change">+this✝&#178;  +this✝&#185;  +this✝  +this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a : Word
+hw : 3 ≤ a.wt
+this✝&#178; : nz a.b0 ≤ 1
+this✝&#185; : nz a.b1 ≤ 1
+this✝ : nz a.b2 ≤ 1
+this : nz a.b3 ≤ 1
+⊢ a.wt ≤ 4</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>unfold Word.wt; omega</code><span class="change">goals accomplished</span></div><p class="explain">Replaces a defined name by its definition.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rcases Nat.lt_or_ge (mixMat.apply a).wt 2 with hb | hb</code><span class="change">+1 goal  +hb</span></div><p class="explain">Takes apart a hypothesis in one go with a pattern: rcases h with ⟨x, hx⟩ | h&#39;.</p><div class="state"><pre class="goal">case inl
+a : Word
+hw : 3 ≤ a.wt
+hle : a.wt ≤ 4
+hb : (mixMat.apply a).wt &lt; 2
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre><pre class="goal">case inr
+a : Word
+hw : 3 ≤ a.wt
+hle : a.wt ≤ 4
+hb : (mixMat.apply a).wt ≥ 2
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; rcases Nat.lt_or_ge (mixMat.apply a).wt 1 with hb&#39; | hb&#39;</code><span class="change">+hb&#39;</span></div><p class="explain">Takes apart a hypothesis in one go with a pattern: rcases h with ⟨x, hx⟩ | h&#39;.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; have h0 : mixMat.apply a = 0 := Word.wt_eq_zero.mp (by omega)</code><span class="change">closed 1 goal  +h0</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>have : a = 0 := by rw [← invMixMat_apply_mixMat_apply a, h0, Mat.apply_zero]</code><span class="change">goals accomplished</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>subst this; simp [Word.wt] at hw</code><span class="change">goals accomplished</span></div><p class="explain">Given h : x = e, replaces x by e everywhere and removes x.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>&#183; have := wt_apply_of_wt_one invMixMat invMix_units _ (by omega : (mixMat.apply a).wt = 1)</code><span class="change">+this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [invMixMat_apply_mixMat_apply] at this</code><span class="change">~this</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">case inl.inr
+a : Word
+hw : 3 ≤ a.wt
+hle : a.wt ≤ 4
+hb : (mixMat.apply a).wt &lt; 2
+hb&#39; : (mixMat.apply a).wt ≥ 1
+this : a.wt = 4
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p181">
+<h2>branch_mixColumn <span class="line">line 182</span></h2>
+<pre class="code">theorem branch_mixColumn (a : Word) (ha : a ≠ 0) : 5 ≤ a.wt + (mixColumn a).wt := by</pre>
+<p class="words">In words: 5 is at most a.wt + (mixColumn a).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Word
+ha : a ≠ 0
+⊢ 5 ≤ a.wt + (mixColumn a).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>rw [mixColumn_eq]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">a : Word
+ha : a ≠ 0
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rcases Nat.lt_or_ge a.wt 3 with h | h</code><span class="change">+1 goal  +h</span></div><p class="explain">Takes apart a hypothesis in one go with a pattern: rcases h with ⟨x, hx⟩ | h&#39;.</p><div class="state"><pre class="goal">case inl
+a : Word
+ha : a ≠ 0
+h : a.wt &lt; 3
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre><pre class="goal">case inr
+a : Word
+ha : a ≠ 0
+h : a.wt ≥ 3
+⊢ 5 ≤ a.wt + (mixMat.apply a).wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact branch_low a ha (by omega)</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>&#183; exact branch_high a h</code><span class="change">goals accomplished</span></div><p class="explain">Finishes the goal with a term that proves exactly it. The most common last step.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p188">
+<h2>branch_mixColumn_tight <span class="line">line 189</span></h2>
+<pre class="code">theorem branch_mixColumn_tight : ∃ a : Word, a ≠ 0 ∧ a.wt + (mixColumn a).wt = 5 :=
+  ⟨⟨1, 0, 0, 0⟩, by decide, by decide +kernel⟩</pre>
+<p class="words">In words: { b0 := 1, b1 := 0, b2 := 0, b3 := 0 } is not equal to 0</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">⊢ { b0 := 1, b1 := 0, b2 := 0, b3 := 0 } ≠ 0</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>decide, by decide +kernel⟩</code><span class="change">goals accomplished</span></div><p class="explain">Proves a statement by computing its answer, for statements about specific values (2 + 2 = 4, 7 is prime…).</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p193">
+<h2>branch_mixColumn_diff <span class="line">line 194</span></h2>
+<pre class="code">theorem branch_mixColumn_diff {a b : Word} (h : a ≠ b) :
+    5 ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt := by</pre>
+<p class="words">In words: 5 is at most (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Word
+h : a ≠ b
+⊢ 5 ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>rw [← mixColumn_xor]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">a b : Word
+h : a ≠ b
+⊢ 5 ≤ (a ^^^ b).wt + (mixColumn (a ^^^ b)).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>apply branch_mixColumn</code><span class="change">goal rewritten</span></div><p class="explain">Works backwards: uses a fact of the form &quot;… → goal&quot;; what the fact needs becomes your new goals.</p><div class="state"><pre class="goal">a b : Word
+h : a ≠ b
+⊢ a ^^^ b ≠ 0</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>intro h&#39;</code><span class="change">+h&#39;</span></div><p class="explain">Proves &quot;if … then …&quot; or &quot;for all …&quot; by assuming the premise: moves it from the goal into your hypotheses, under the name you give.</p><div class="state"><pre class="goal">a b : Word
+h : a ≠ b
+h&#39; : a ^^^ b = 0
+⊢ False</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>apply h</code><span class="change">goal rewritten</span></div><p class="explain">Works backwards: uses a fact of the form &quot;… → goal&quot;; what the fact needs becomes your new goals.</p><div class="state"><pre class="goal">a b : Word
+h : a ≠ b
+h&#39; : a ^^^ b = 0
+⊢ a = b</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨a0, a1, a2, a3⟩ := a</code><span class="change">+a0  +a1  +a2  +a3  −a  ~h  ~h&#39;</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">b : Word
+a0 a1 a2 a3 : Byte
+h : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ b
+h&#39; : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ^^^ b = 0
+⊢ { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } = b</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨b0, b1, b2, b3⟩ := b</code><span class="change">+b0  +b1  +b2  +b3  −b  ~h  ~h&#39;</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 : Byte
+h : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ { b0 := b0, b1 := b1, b2 := b2, b3 := b3 }
+h&#39; : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ^^^ { b0 := b0, b1 := b1, b2 := b2, b3 := b3 } = 0
+⊢ { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } = { b0 := b0, b1 := b1, b2 := b2, b3 := b3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [Word.xor_def, Word.zero_def, Word.mk.injEq, UInt8.xor_eq_zero_iff] at h&#39;</code><span class="change">~h&#39;</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">a0 a1 a2 a3 b0 b1 b2 b3 : Byte
+h : { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } ≠ { b0 := b0, b1 := b1, b2 := b2, b3 := b3 }
+h&#39; : a0 = b0 ∧ a1 = b1 ∧ a2 = b2 ∧ a3 = b3
+⊢ { b0 := a0, b1 := a1, b2 := a2, b3 := a3 } = { b0 := b0, b1 := b1, b2 := b2, b3 := b3 }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp [h&#39;]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p205">
+<h2>branch_invMixColumn <span class="line">line 206</span></h2>
+<pre class="code">theorem branch_invMixColumn (a : Word) (ha : a ≠ 0) : 5 ≤ a.wt + (invMixColumn a).wt := by</pre>
+<p class="words">In words: 5 is at most a.wt + (invMixColumn a).wt</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a : Word
+ha : a ≠ 0
+⊢ 5 ≤ a.wt + (invMixColumn a).wt</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>have hc : invMixColumn a ≠ 0 := by</code><span class="change">goal rewritten</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>intro h; apply ha; rw [← mixColumn_invMixColumn a, h, mixColumn_eq, Mat.apply_zero]</code><span class="change">goals accomplished</span></div><p class="explain">Proves &quot;if … then …&quot; or &quot;for all …&quot; by assuming the premise: moves it from the goal into your hypotheses, under the name you give.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>have := branch_mixColumn _ hc</code><span class="change">+this</span></div><p class="explain">States and proves an intermediate fact, then adds it to your hypotheses.</p><div class="state"><pre class="goal">a : Word
+ha : a ≠ 0
+hc : invMixColumn a ≠ 0
+this : 5 ≤ (invMixColumn a).wt + (mixColumn (invMixColumn a)).wt
+⊢ 5 ≤ a.wt + (invMixColumn a).wt</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [mixColumn_invMixColumn] at this</code><span class="change">~this</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">a : Word
+ha : a ≠ 0
+hc : invMixColumn a ≠ 0
+this : 5 ≤ (invMixColumn a).wt + a.wt
+⊢ 5 ≤ a.wt + (invMixColumn a).wt</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>omega</code><span class="change">goals accomplished</span></div><p class="explain">Solves arithmetic with + , −, numbers, ≤, &lt; and = over natural numbers and integers. It gives up on x * y with both unknown.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<details class="source"><summary>The whole file</summary><pre class="code">import AES.Linear
+
+/-!
+# The branch number of MixColumns is 5
+
+The branch number of a column map `M` is the least value of `wt a + wt (M a)` over nonzero columns `a`,
+where `wt` counts nonzero bytes (*The Design of Rijndael*, &#167;9.3). For `MixColumns` it is 5, the most a
+4&#215;4 map can have: a change in one byte of a column changes all four bytes of the output, a change in two
+changes at least three, and so on.
+
+A search over all 2&#179;&#178; columns would settle it, and is what a SAT solver does. Here it is proved instead,
+in the kernel, from the algebra of `GF.lean`:
+
+* `M` commutes with scaling a column by a nonzero `λ`, which does not change which bytes are zero. So a
+  column with nonzero bytes in two places can be scaled so that the first of them is `1`, and only the
+  255 values of the second remain: 6 &#215; 255 cases for weight 2, 4 cases for weight 1.
+* For weight 3 and 4, look at the output instead. If it had weight at most 1, it would be `z` times a
+  unit vector, and the input would be `z` times a column of `M⁻&#185;`, which has four nonzero bytes.
+-/
+
+namespace AES
+
+set_option maxHeartbeats 0
+
+/-- `1` if the byte is nonzero. -/
+def nz (b : Byte) : Nat := if b = 0 then 0 else 1
+
+/-- The number of nonzero bytes of a column. -/
+def Word.wt (w : Word) : Nat := nz w.b0 + nz w.b1 + nz w.b2 + nz w.b3
+
+@[simp] theorem nz_zero : nz 0 = 0 := rfl
+theorem nz_of_ne {b : Byte} (h : b ≠ 0) : nz b = 1 := by simp [nz, h]
+theorem nz_le (b : Byte) : nz b ≤ 1 := by unfold nz; split &lt;;&gt; omega
+
+theorem Word.wt_eq_zero {w : Word} : w.wt = 0 ↔ w = 0 := by
+  obtain ⟨a, b, c, d⟩ := w
+  simp only [wt, nz, zero_def, mk.injEq]
+  split &lt;;&gt; split &lt;;&gt; split &lt;;&gt; split &lt;;&gt; simp_all
+
+/-- Multiply every byte by `λ`. -/
+def Word.scale (l : Byte) (w : Word) : Word := w.map (mul l)
+
+theorem dot_scale (r : Word) (l : Byte) (w : Word) : dot r (w.scale l) = mul l (dot r w) := by
+  simp only [dot, Word.scale, Word.map, mul_xor, mul_left_comm l]
+
+theorem Mat.apply_scale (m : Mat) (l : Byte) (w : Word) : m.apply (w.scale l) = (m.apply w).scale l := by
+  simp only [Mat.apply, dot_scale]; rfl
+
+theorem nz_mul {l : Byte} (hl : l ≠ 0) (b : Byte) : nz (mul l b) = nz b := by
+  unfold nz
+  by_cases hb : b = 0
+  &#183; simp [hb, mul_zero]
+  &#183; simp [hb, mul_ne_zero hl hb]
+
+theorem Word.wt_scale {l : Byte} (hl : l ≠ 0) (w : Word) : (w.scale l).wt = w.wt := by
+  simp only [wt, scale, map, nz_mul hl]
+
+/-! ## Columns with one or two nonzero bytes -/
+
+/-- Scaling a column whose byte `i` is `x ≠ 0` by `x⁻&#185;` makes that byte `1`; written out for the ten
+shapes a column of weight one or two can have. -/
+theorem scale_inv_mul {x : Byte} (hx : x ≠ 0) (y : Byte) : mul x (mul (inv x) y) = y := mul_inv_mul hx y
+
+/-- A weight-one column is a multiple of a unit vector, so its image has the weight of a column of `m`. -/
+theorem wt_apply_single (m : Mat) {x : Byte} (hx : x ≠ 0) (u : Word) (hu : u.scale x = v) :
+    (m.apply v).wt = (m.apply u).wt := by
+  rw [← hu, Mat.apply_scale, Word.wt_scale hx]
+
+theorem single0 (x : Byte) : (⟨1, 0, 0, 0⟩ : Word).scale x = ⟨x, 0, 0, 0⟩ := by
+  simp [Word.scale, Word.map, mul_one, mul_zero]
+theorem single1 (x : Byte) : (⟨0, 1, 0, 0⟩ : Word).scale x = ⟨0, x, 0, 0⟩ := by
+  simp [Word.scale, Word.map, mul_one, mul_zero]
+theorem single2 (x : Byte) : (⟨0, 0, 1, 0⟩ : Word).scale x = ⟨0, 0, x, 0⟩ := by
+  simp [Word.scale, Word.map, mul_one, mul_zero]
+theorem single3 (x : Byte) : (⟨0, 0, 0, 1⟩ : Word).scale x = ⟨0, 0, 0, x⟩ := by
+  simp [Word.scale, Word.map, mul_one, mul_zero]
+
+/-- Every column of `MixColumns` and of `InvMixColumns` has four nonzero bytes. -/
+theorem mix_units : (mixMat.apply ⟨1, 0, 0, 0⟩).wt = 4 ∧ (mixMat.apply ⟨0, 1, 0, 0⟩).wt = 4 ∧
+    (mixMat.apply ⟨0, 0, 1, 0⟩).wt = 4 ∧ (mixMat.apply ⟨0, 0, 0, 1⟩).wt = 4 := by decide +kernel
+theorem invMix_units : (invMixMat.apply ⟨1, 0, 0, 0⟩).wt = 4 ∧ (invMixMat.apply ⟨0, 1, 0, 0⟩).wt = 4 ∧
+    (invMixMat.apply ⟨0, 0, 1, 0⟩).wt = 4 ∧ (invMixMat.apply ⟨0, 0, 0, 1⟩).wt = 4 := by decide +kernel
+
+/-- The weight-two check: with the first nonzero byte scaled to `1`, every value of the second gives an
+output with at least three nonzero bytes. Six positions, 256 values each. -/
+theorem mix_pairs : allBytes (fun μ =&gt; μ == 0 || (
+    3 ≤ (mixMat.apply ⟨1, μ, 0, 0⟩).wt &amp;&amp; 3 ≤ (mixMat.apply ⟨1, 0, μ, 0⟩).wt &amp;&amp;
+    3 ≤ (mixMat.apply ⟨1, 0, 0, μ⟩).wt &amp;&amp; 3 ≤ (mixMat.apply ⟨0, 1, μ, 0⟩).wt &amp;&amp;
+    3 ≤ (mixMat.apply ⟨0, 1, 0, μ⟩).wt &amp;&amp; 3 ≤ (mixMat.apply ⟨0, 0, 1, μ⟩).wt)) = true := by
+  decide +kernel
+
+theorem mix_pair_spec {μ : Byte} (h : μ ≠ 0) :
+    3 ≤ (mixMat.apply ⟨1, μ, 0, 0⟩).wt ∧ 3 ≤ (mixMat.apply ⟨1, 0, μ, 0⟩).wt ∧
+    3 ≤ (mixMat.apply ⟨1, 0, 0, μ⟩).wt ∧ 3 ≤ (mixMat.apply ⟨0, 1, μ, 0⟩).wt ∧
+    3 ≤ (mixMat.apply ⟨0, 1, 0, μ⟩).wt ∧ 3 ≤ (mixMat.apply ⟨0, 0, 1, μ⟩).wt := by
+  simpa [h, and_assoc] using allBytes_spec mix_pairs μ
+
+/-- A column with nonzero bytes `x` and `y` in two places is `x` times one with `1` and `x⁻&#185; • y`. -/
+theorem pair_scale {x : Byte} (hx : x ≠ 0) (y : Byte) :
+    (⟨1, mul (inv x) y, 0, 0⟩ : Word).scale x = ⟨x, y, 0, 0⟩ ∧
+    (⟨1, 0, mul (inv x) y, 0⟩ : Word).scale x = ⟨x, 0, y, 0⟩ ∧
+    (⟨1, 0, 0, mul (inv x) y⟩ : Word).scale x = ⟨x, 0, 0, y⟩ ∧
+    (⟨0, 1, mul (inv x) y, 0⟩ : Word).scale x = ⟨0, x, y, 0⟩ ∧
+    (⟨0, 1, 0, mul (inv x) y⟩ : Word).scale x = ⟨0, x, 0, y⟩ ∧
+    (⟨0, 0, 1, mul (inv x) y⟩ : Word).scale x = ⟨0, 0, x, y⟩ := by
+  simp [Word.scale, Word.map, mul_one, mul_zero, mul_inv_mul hx]
+
+theorem inv_mul_ne_zero {x y : Byte} (hx : x ≠ 0) (hy : y ≠ 0) : mul (inv x) y ≠ 0 :=
+  mul_ne_zero (inv_ne_zero hx) hy
+
+/-- Columns of weight one or two: the output makes up the rest of the 5. -/
+theorem branch_low (a : Word) (ha : a ≠ 0) (hw : a.wt ≤ 2) : 5 ≤ a.wt + (mixMat.apply a).wt := by
+  obtain ⟨a0, a1, a2, a3⟩ := a
+  obtain ⟨m0, m1, m2, m3⟩ := mix_units
+  by_cases h0 : a0 = 0 &lt;;&gt; by_cases h1 : a1 = 0 &lt;;&gt; by_cases h2 : a2 = 0 &lt;;&gt; by_cases h3 : a3 = 0 &lt;;&gt;
+    (try simp only [h0, h1, h2, h3] at ha hw ⊢) &lt;;&gt;
+    (try simp only [Word.wt, nz_zero, nz_of_ne, h0, h1, h2, h3, ne_eq, not_false_eq_true] at hw) &lt;;&gt;
+    (try simp only [Word.wt, nz_zero, nz_of_ne, h0, h1, h2, h3, ne_eq, not_false_eq_true]) &lt;;&gt;
+    first
+    | omega
+    | exact absurd rfl ha
+    | (rw [← Word.wt, wt_apply_single mixMat h0 _ (single0 a0)]; omega)
+    | (rw [← Word.wt, wt_apply_single mixMat h1 _ (single1 a1)]; omega)
+    | (rw [← Word.wt, wt_apply_single mixMat h2 _ (single2 a2)]; omega)
+    | (rw [← Word.wt, wt_apply_single mixMat h3 _ (single3 a3)]; omega)
+    | (rw [← Word.wt, ← (pair_scale h0 a1).1, Mat.apply_scale, Word.wt_scale h0]
+       have := (mix_pair_spec (inv_mul_ne_zero h0 h1)).1; omega)
+    | (rw [← Word.wt, ← (pair_scale h0 a2).2.1, Mat.apply_scale, Word.wt_scale h0]
+       have := (mix_pair_spec (inv_mul_ne_zero h0 h2)).2.1; omega)
+    | (rw [← Word.wt, ← (pair_scale h0 a3).2.2.1, Mat.apply_scale, Word.wt_scale h0]
+       have := (mix_pair_spec (inv_mul_ne_zero h0 h3)).2.2.1; omega)
+    | (rw [← Word.wt, ← (pair_scale h1 a2).2.2.2.1, Mat.apply_scale, Word.wt_scale h1]
+       have := (mix_pair_spec (inv_mul_ne_zero h1 h2)).2.2.2.1; omega)
+    | (rw [← Word.wt, ← (pair_scale h1 a3).2.2.2.2.1, Mat.apply_scale, Word.wt_scale h1]
+       have := (mix_pair_spec (inv_mul_ne_zero h1 h3)).2.2.2.2.1; omega)
+    | (rw [← Word.wt, ← (pair_scale h2 a3).2.2.2.2.2, Mat.apply_scale, Word.wt_scale h2]
+       have := (mix_pair_spec (inv_mul_ne_zero h2 h3)).2.2.2.2.2; omega)
+
+/-- A column of weight one is sent by `m` to a multiple of one of `m`&#39;s columns. -/
+theorem wt_apply_of_wt_one (m : Mat)
+    (hm : (m.apply ⟨1, 0, 0, 0⟩).wt = 4 ∧ (m.apply ⟨0, 1, 0, 0⟩).wt = 4 ∧
+      (m.apply ⟨0, 0, 1, 0⟩).wt = 4 ∧ (m.apply ⟨0, 0, 0, 1⟩).wt = 4)
+    (b : Word) (hb : b.wt = 1) : (m.apply b).wt = 4 := by
+  obtain ⟨m0, m1, m2, m3⟩ := hm
+  obtain ⟨a0, a1, a2, a3⟩ := b
+  by_cases h0 : a0 = 0 &lt;;&gt; by_cases h1 : a1 = 0 &lt;;&gt; by_cases h2 : a2 = 0 &lt;;&gt; by_cases h3 : a3 = 0 &lt;;&gt;
+    (try simp only [h0, h1, h2, h3] at hb ⊢) &lt;;&gt;
+    (try simp only [Word.wt, nz_zero, nz_of_ne, h0, h1, h2, h3, ne_eq, not_false_eq_true] at hb) &lt;;&gt;
+    first
+    | omega
+    | (rw [wt_apply_single m h0 _ (single0 a0)]; omega)
+    | (rw [wt_apply_single m h1 _ (single1 a1)]; omega)
+    | (rw [wt_apply_single m h2 _ (single2 a2)]; omega)
+    | (rw [wt_apply_single m h3 _ (single3 a3)]; omega)
+
+theorem invMixMat_apply_mixMat_apply (a : Word) : invMixMat.apply (mixMat.apply a) = a := by
+  rw [Mat.apply_apply, invMixMat_mul_mixMat, Mat.one_apply]
+
+theorem Mat.apply_zero (m : Mat) : m.apply 0 = 0 := by
+  simp [Mat.apply, dot, mul_zero]
+
+/-- Columns of weight three or four: if the output had weight at most one, the input would be a
+multiple of a column of `InvMixColumns`, which has weight four. -/
+theorem branch_high (a : Word) (hw : 3 ≤ a.wt) : 5 ≤ a.wt + (mixMat.apply a).wt := by
+  have hle : a.wt ≤ 4 := by
+    have := nz_le a.b0; have := nz_le a.b1; have := nz_le a.b2; have := nz_le a.b3
+    unfold Word.wt; omega
+  rcases Nat.lt_or_ge (mixMat.apply a).wt 2 with hb | hb
+  &#183; rcases Nat.lt_or_ge (mixMat.apply a).wt 1 with hb&#39; | hb&#39;
+    &#183; have h0 : mixMat.apply a = 0 := Word.wt_eq_zero.mp (by omega)
+      have : a = 0 := by rw [← invMixMat_apply_mixMat_apply a, h0, Mat.apply_zero]
+      subst this; simp [Word.wt] at hw
+    &#183; have := wt_apply_of_wt_one invMixMat invMix_units _ (by omega : (mixMat.apply a).wt = 1)
+      rw [invMixMat_apply_mixMat_apply] at this
+      omega
+  &#183; omega
+
+/-! ## The branch number -/
+
+/-- The branch number of `MixColumns` is at least 5: a nonzero column and its image have at least
+five nonzero bytes between them. -/
+theorem branch_mixColumn (a : Word) (ha : a ≠ 0) : 5 ≤ a.wt + (mixColumn a).wt := by
+  rw [mixColumn_eq]
+  rcases Nat.lt_or_ge a.wt 3 with h | h
+  &#183; exact branch_low a ha (by omega)
+  &#183; exact branch_high a h
+
+/-- and exactly 5: one changed byte changes all four. -/
+theorem branch_mixColumn_tight : ∃ a : Word, a ≠ 0 ∧ a.wt + (mixColumn a).wt = 5 :=
+  ⟨⟨1, 0, 0, 0⟩, by decide, by decide +kernel⟩
+
+/-- The same for differences: two different columns, and their images, differ in at least five bytes
+between them. This is the form the wide-trail argument uses. -/
+theorem branch_mixColumn_diff {a b : Word} (h : a ≠ b) :
+    5 ≤ (a ^^^ b).wt + (mixColumn a ^^^ mixColumn b).wt := by
+  rw [← mixColumn_xor]
+  apply branch_mixColumn
+  intro h&#39;
+  apply h
+  obtain ⟨a0, a1, a2, a3⟩ := a
+  obtain ⟨b0, b1, b2, b3⟩ := b
+  simp only [Word.xor_def, Word.zero_def, Word.mk.injEq, UInt8.xor_eq_zero_iff] at h&#39;
+  simp [h&#39;]
+
+/-- `InvMixColumns` has branch number 5 too. -/
+theorem branch_invMixColumn (a : Word) (ha : a ≠ 0) : 5 ≤ a.wt + (invMixColumn a).wt := by
+  have hc : invMixColumn a ≠ 0 := by
+    intro h; apply ha; rw [← mixColumn_invMixColumn a, h, mixColumn_eq, Mat.apply_zero]
+  have := branch_mixColumn _ hc
+  rw [mixColumn_invMixColumn] at this
+  omega
+
+end AES
+</pre></details>
+<footer>Made with <a href="https://github.com/keithadler/leanstudio">Lean Studio</a>, by Keith Adler (<a href="https://x.com/keithadler">@keithadler</a>). Goals are exactly as Lean reported them.</footer>
+</main>
+<script>
+const steps = [...document.querySelectorAll('.step')];
+let at = -1;
+function go(i) {
+  if (i < 0 || i >= steps.length) return;
+  steps.forEach(s => s.classList.remove('current'));
+  at = i; steps[i].classList.add('current'); steps[i].focus({ preventScroll: true });
+  steps[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+steps.forEach((s, i) => s.addEventListener('click', () => go(i)));
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'j') { go(at + 1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft' || e.key === 'k') { go(at - 1); e.preventDefault(); }
+});</script>
+</body></html>

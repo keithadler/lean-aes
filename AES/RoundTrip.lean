@@ -99,13 +99,13 @@ theorem cipherRounds_invCipherRounds (n r : Nat) (s : State) :
       addRoundKey_addRoundKey]
     exact ih (r + 1) s
 
-/-- **`InvCipher` inverts `Cipher`**, for any round keys. -/
+/-- `InvCipher` inverts `Cipher`, for any round keys. -/
 theorem invCipher_cipher (p : State) : invCipher rk (cipher rk p) = p := by
   simp only [invCipher, cipher, addRoundKey_addRoundKey]
   rw [show Nr - 1 = 0 + 13 from rfl, show (1 : Nat) = 0 + 1 from rfl, invCipherRounds_cipherRounds,
     invShiftRows_shiftRows, invSubBytes_subBytes, addRoundKey_addRoundKey]
 
-/-- **`Cipher` inverts `InvCipher`**, for any round keys. -/
+/-- `Cipher` inverts `InvCipher`, for any round keys. -/
 theorem cipher_invCipher (c : State) : cipher rk (invCipher rk c) = c := by
   simp only [invCipher, cipher, addRoundKey_addRoundKey]
   rw [show Nr - 1 = 0 + 13 from rfl, show (1 : Nat) = 0 + 1 from rfl, cipherRounds_invCipherRounds,
@@ -115,7 +115,7 @@ end
 
 /-! ## AES-256 -/
 
-/-- **Decryption undoes encryption**: for every 256-bit key and every 128-bit block. -/
+/-- Decryption undoes encryption: for every 256-bit key and every 128-bit block. -/
 theorem decrypt_encrypt (key : Key) (p : State) : decrypt key (encrypt key p) = p :=
   invCipher_cipher _ p
 

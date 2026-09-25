@@ -14,17 +14,25 @@ abbrev Byte := UInt8
 
 /-- A word: four bytes. As a column of the state, `b0` is row 0. -/
 structure Word where
+  /-- Byte 0; row 0 when the word is a column of the state. -/
   b0 : Byte
+  /-- Byte 1. -/
   b1 : Byte
+  /-- Byte 2. -/
   b2 : Byte
+  /-- Byte 3. -/
   b3 : Byte
   deriving DecidableEq, Repr, Inhabited
 
 /-- The state, FIPS-197 §3.4: `c.bR` is `s[R, c]`. Input byte `in[r + 4c]` lands at `s[r, c]`. -/
 structure State where
+  /-- Column 0: `s[0,0] … s[3,0]`, input bytes 0–3. -/
   c0 : Word
+  /-- Column 1: input bytes 4–7. -/
   c1 : Word
+  /-- Column 2: input bytes 8–11. -/
   c2 : Word
+  /-- Column 3: input bytes 12–15. -/
   c3 : Word
   deriving DecidableEq, Repr, Inhabited
 

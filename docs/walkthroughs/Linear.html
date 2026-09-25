@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linear.lean · proof walkthrough</title>
+<style>
+:root { --bg:#fbfaf8; --fg:#1d1d1f; --dim:#6b6b70; --card:#ffffff; --line:#e4e2dd; --accent:#3f6fd8; --ok:#1f8a3b; --code:#f3f1ec; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16171a; --fg:#e6e6e9; --dim:#9a9aa3; --card:#1e2024; --line:#2e3036; --accent:#7aa2f7; --ok:#4cc36b; --code:#23252b; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; } h2 { font-size: 20px; margin: 0 0 12px; }
+.sub, .line, .words, footer, .explain { color: var(--dim); }
+.line { font-size: 13px; font-weight: normal; margin-left: 6px; }
+a { color: var(--accent); }
+.button { display:inline-block; padding:6px 14px; border:1px solid var(--accent); border-radius:6px; text-decoration:none; }
+nav { margin: 20px 0; display:flex; flex-wrap:wrap; gap:6px 12px; font-size:14px; }
+pre, code { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+pre.code { background: var(--code); padding: 12px 14px; border-radius: 8px; }
+.proof { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; }
+.state { margin-top: 8px; }
+.state.start { margin: 12px 0 4px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-bottom: 4px; }
+.goal { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 4px 0; background: var(--code); border-radius: 0 6px 6px 0; }
+.none { color: var(--ok); font-weight: 600; }
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 16px 0 0; }
+.step { counter-increment: s; position: relative; padding: 12px 12px 12px 44px; border-top: 1px solid var(--line); outline: none; }
+.step::before { content: counter(s); position: absolute; left: 8px; top: 12px; width: 24px; height: 24px; border-radius: 50%;
+                background: var(--code); color: var(--dim); font-size: 13px; text-align: center; line-height: 24px; }
+.step.done::before { background: var(--ok); color: #fff; content: "✓"; }
+.step.current { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
+.tactic { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.tactic code { font-weight: 600; }
+.change { font-size: 13px; color: var(--dim); }
+.explain { margin: 4px 0 0; font-size: 14px; }
+details.source { margin-top: 24px; } footer { margin-top: 32px; font-size: 13px; }</style></head><body>
+<main>
+<header><h1>Linear.lean</h1><p class="sub">A step-by-step walkthrough of 10 proofs. Each step shows the tactic, what it does, and the goals Lean is left with. Use ← and → to step through.</p><p><a class="button" href="https://live.lean-lang.org/#code=import%20AES.Spec%0A%0A%2F-%21%0A%23%20Columns%20as%20vectors%20over%20GF%282%E2%81%B8%29%0A%0A%60MixColumns%60%20and%20%60InvMixColumns%60%20multiply%20each%20column%20by%20a%204%C3%974%20matrix.%20Rather%20than%20expanding%0A%60InvMixColumns%20%E2%88%98%20MixColumns%60%20into%20sixty-four%20products%20and%20regrouping%20them%20by%20hand%2C%20this%20proves%20once%20that%0Aapplying%20two%20matrices%20in%20turn%20is%20applying%20their%20product%2C%20and%20then%20lets%20the%20kernel%20multiply%20the%20two%0Amatrices%20of%20FIPS-197%20and%20see%20the%20identity.%0A-%2F%0A%0Anamespace%20AES%0A%0Aset_option%20maxHeartbeats%200%0A%0A%2F--%20A%204%C3%974%20matrix%20over%20GF%282%E2%81%B8%29%2C%20by%20rows.%20-%2F%0Astructure%20Mat%20where%0A%20%20%2F--%20Row%200.%20-%2F%0A%20%20r0%20%3A%20Word%0A%20%20%2F--%20Row%201.%20-%2F%0A%20%20r1%20%3A%20Word%0A%20%20%2F--%20Row%202.%20-%2F%0A%20%20r2%20%3A%20Word%0A%20%20%2F--%20Row%203.%20-%2F%0A%20%20r3%20%3A%20Word%0A%20%20deriving%20DecidableEq%2C%20Repr%0A%0A%2F--%20%60%CE%A3%E2%82%96%20r%E2%82%96%20%E2%80%A2%20w%E2%82%96%60.%20-%2F%0Adef%20dot%20%28r%20w%20%3A%20Word%29%20%3A%20Byte%20%3A%3D%20mul%20r.b0%20w.b0%20%5E%5E%5E%20mul%20r.b1%20w.b1%20%5E%5E%5E%20mul%20r.b2%20w.b2%20%5E%5E%5E%20mul%20r.b3%20w.b3%0A%0Anamespace%20Mat%0A%0A%2F--%20The%20matrix%20times%20a%20column.%20-%2F%0Adef%20apply%20%28m%20%3A%20Mat%29%20%28w%20%3A%20Word%29%20%3A%20Word%20%3A%3D%20%E2%9F%A8dot%20m.r0%20w%2C%20dot%20m.r1%20w%2C%20dot%20m.r2%20w%2C%20dot%20m.r3%20w%E2%9F%A9%0A%0A%2F--%20Column%200%20of%20a%20matrix.%20-%2F%0Adef%20col0%20%28m%20%3A%20Mat%29%20%3A%20Word%20%3A%3D%20%E2%9F%A8m.r0.b0%2C%20m.r1.b0%2C%20m.r2.b0%2C%20m.r3.b0%E2%9F%A9%0A%2F--%20Column%201%20of%20a%20matrix.%20-%2F%0Adef%20col1%20%28m%20%3A%20Mat%29%20%3A%20Word%20%3A%3D%20%E2%9F%A8m.r0.b1%2C%20m.r1.b1%2C%20m.r2.b1%2C%20m.r3.b1%E2%9F%A9%0A%2F--%20Column%202%20of%20a%20matrix.%20-%2F%0Adef%20col2%20%28m%20%3A%20Mat%29%20%3A%20Word%20%3A%3D%20%E2%9F%A8m.r0.b2%2C%20m.r1.b2%2C%20m.r2.b2%2C%20m.r3.b2%E2%9F%A9%0A%2F--%20Column%203%20of%20a%20matrix.%20-%2F%0Adef%20col3%20%28m%20%3A%20Mat%29%20%3A%20Word%20%3A%3D%20%E2%9F%A8m.r0.b3%2C%20m.r1.b3%2C%20m.r2.b3%2C%20m.r3.b3%E2%9F%A9%0A%0A%2F--%20The%20row%20vector%20%60a%60%20times%20the%20matrix%20%60b%60.%20-%2F%0Adef%20row%20%28a%20%3A%20Word%29%20%28b%20%3A%20Mat%29%20%3A%20Word%20%3A%3D%20%E2%9F%A8dot%20a%20b.col0%2C%20dot%20a%20b.col1%2C%20dot%20a%20b.col2%2C%20dot%20a%20b.col3%E2%9F%A9%0A%0A%2F--%20The%20matrix%20product.%20-%2F%0Adef%20mul%20%28a%20b%20%3A%20Mat%29%20%3A%20Mat%20%3A%3D%20%E2%9F%A8row%20a.r0%20b%2C%20row%20a.r1%20b%2C%20row%20a.r2%20b%2C%20row%20a.r3%20b%E2%9F%A9%0A%0A%2F--%20The%20identity%20matrix.%20-%2F%0Adef%20one%20%3A%20Mat%20%3A%3D%20%E2%9F%A8%E2%9F%A81%2C%200%2C%200%2C%200%E2%9F%A9%2C%20%E2%9F%A80%2C%201%2C%200%2C%200%E2%9F%A9%2C%20%E2%9F%A80%2C%200%2C%201%2C%200%E2%9F%A9%2C%20%E2%9F%A80%2C%200%2C%200%2C%201%E2%9F%A9%E2%9F%A9%0A%0Atheorem%20dot_apply%20%28r%20%3A%20Word%29%20%28b%20%3A%20Mat%29%20%28w%20%3A%20Word%29%20%3A%20dot%20r%20%28b.apply%20w%29%20%3D%20dot%20%28row%20r%20b%29%20w%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8r0%2C%20r1%2C%20r2%2C%20r3%E2%9F%A9%20%3A%3D%20r%0A%20%20obtain%20%E2%9F%A8%E2%9F%A8a00%2C%20a01%2C%20a02%2C%20a03%E2%9F%A9%2C%20%E2%9F%A8a10%2C%20a11%2C%20a12%2C%20a13%E2%9F%A9%2C%20%E2%9F%A8a20%2C%20a21%2C%20a22%2C%20a23%E2%9F%A9%2C%20%E2%9F%A8a30%2C%20a31%2C%20a32%2C%20a33%E2%9F%A9%E2%9F%A9%20%3A%3D%20b%0A%20%20obtain%20%E2%9F%A8w0%2C%20w1%2C%20w2%2C%20w3%E2%9F%A9%20%3A%3D%20w%0A%20%20simp%20only%20%5Bdot%2C%20apply%2C%20row%2C%20col0%2C%20col1%2C%20col2%2C%20col3%2C%20mul_xor%2C%20xor_mul%2C%20mul_assoc%5D%0A%20%20ac_rfl%0A%0A%2F--%20Applying%20%60b%60%20and%20then%20%60a%60%20is%20applying%20%60a%20%2A%20b%60.%20-%2F%0Atheorem%20apply_apply%20%28a%20b%20%3A%20Mat%29%20%28w%20%3A%20Word%29%20%3A%20a.apply%20%28b.apply%20w%29%20%3D%20%28a.mul%20b%29.apply%20w%20%3A%3D%20by%0A%20%20simp%20only%20%5Bmul%5D%0A%20%20rw%20%5Bapply%2C%20dot_apply%2C%20dot_apply%2C%20dot_apply%2C%20dot_apply%5D%0A%20%20rfl%0A%0Atheorem%20one_apply%20%28w%20%3A%20Word%29%20%3A%20one.apply%20w%20%3D%20w%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8w0%2C%20w1%2C%20w2%2C%20w3%E2%9F%A9%20%3A%3D%20w%0A%20%20simp%20only%20%5Bapply%2C%20one%2C%20dot%2C%20one_mul%2C%20zero_mul%2C%20UInt8.xor_zero%2C%20UInt8.zero_xor%5D%0A%0Atheorem%20apply_xor%20%28m%20%3A%20Mat%29%20%28v%20w%20%3A%20Word%29%20%3A%20m.apply%20%28v%20%5E%5E%5E%20w%29%20%3D%20m.apply%20v%20%5E%5E%5E%20m.apply%20w%20%3A%3D%20by%0A%20%20obtain%20%E2%9F%A8v0%2C%20v1%2C%20v2%2C%20v3%E2%9F%A9%20%3A%3D%20v%0A%20%20obtain%20%E2%9F%A8w0%2C%20w1%2C%20w2%2C%20w3%E2%9F%A9%20%3A%3D%20w%0A%20%20simp%20only%20%5Bapply%2C%20dot%2C%20Word.xor_def%2C%20mul_xor%5D%0A%20%20congr%201%20%3C%3B%3E%20ac_rfl%0A%0Aend%20Mat%0A%0A%2F--%20The%20matrix%20of%20%60MixColumns%60%2C%20eq.%20%285.6%29.%20-%2F%0Adef%20mixMat%20%3A%20Mat%20%3A%3D%20%E2%9F%A8%E2%9F%A82%2C%203%2C%201%2C%201%E2%9F%A9%2C%20%E2%9F%A81%2C%202%2C%203%2C%201%E2%9F%A9%2C%20%E2%9F%A81%2C%201%2C%202%2C%203%E2%9F%A9%2C%20%E2%9F%A83%2C%201%2C%201%2C%202%E2%9F%A9%E2%9F%A9%0A%0A%2F--%20The%20matrix%20of%20%60InvMixColumns%60%2C%20eq.%20%285.17%29.%20-%2F%0Adef%20invMixMat%20%3A%20Mat%20%3A%3D%20%E2%9F%A8%E2%9F%A80x0e%2C%200x0b%2C%200x0d%2C%200x09%E2%9F%A9%2C%20%E2%9F%A80x09%2C%200x0e%2C%200x0b%2C%200x0d%E2%9F%A9%2C%20%E2%9F%A80x0d%2C%200x09%2C%200x0e%2C%200x0b%E2%9F%A9%2C%0A%20%20%E2%9F%A80x0b%2C%200x0d%2C%200x09%2C%200x0e%E2%9F%A9%E2%9F%A9%0A%0Atheorem%20mixColumn_eq%20%28w%20%3A%20Word%29%20%3A%20mixColumn%20w%20%3D%20mixMat.apply%20w%20%3A%3D%20by%0A%20%20simp%20only%20%5BmixColumn%2C%20Mat.apply%2C%20mixMat%2C%20dot%2C%20one_mul%5D%0A%0Atheorem%20invMixColumn_eq%20%28w%20%3A%20Word%29%20%3A%20invMixColumn%20w%20%3D%20invMixMat.apply%20w%20%3A%3D%20rfl%0A%0A%2F--%20The%20two%20matrices%20of%20FIPS-197%20are%20inverse%20to%20each%20other.%20The%20kernel%20multiplies%20them%20out.%20-%2F%0Atheorem%20invMixMat_mul_mixMat%20%3A%20invMixMat.mul%20mixMat%20%3D%20Mat.one%20%3A%3D%20by%20decide%20%2Bkernel%0Atheorem%20mixMat_mul_invMixMat%20%3A%20mixMat.mul%20invMixMat%20%3D%20Mat.one%20%3A%3D%20by%20decide%20%2Bkernel%0A%0Atheorem%20invMixColumn_mixColumn%20%28w%20%3A%20Word%29%20%3A%20invMixColumn%20%28mixColumn%20w%29%20%3D%20w%20%3A%3D%20by%0A%20%20rw%20%5BmixColumn_eq%2C%20invMixColumn_eq%2C%20Mat.apply_apply%2C%20invMixMat_mul_mixMat%2C%20Mat.one_apply%5D%0A%0Atheorem%20mixColumn_invMixColumn%20%28w%20%3A%20Word%29%20%3A%20mixColumn%20%28invMixColumn%20w%29%20%3D%20w%20%3A%3D%20by%0A%20%20rw%20%5BmixColumn_eq%2C%20invMixColumn_eq%2C%20Mat.apply_apply%2C%20mixMat_mul_invMixMat%2C%20Mat.one_apply%5D%0A%0A%2F--%20%60MixColumns%60%20is%20additive%2C%20so%20it%20maps%20differences%20to%20differences.%20-%2F%0Atheorem%20mixColumn_xor%20%28v%20w%20%3A%20Word%29%20%3A%20mixColumn%20%28v%20%5E%5E%5E%20w%29%20%3D%20mixColumn%20v%20%5E%5E%5E%20mixColumn%20w%20%3A%3D%20by%0A%20%20simp%20only%20%5BmixColumn_eq%2C%20Mat.apply_xor%5D%0A%0Aend%20AES%0A">Run this file in the Lean 4 web editor ↗</a></p></header>
+<nav><strong>Proofs</strong> <a href="#p53">dot_apply</a> <a href="#p61">apply_apply</a> <a href="#p66">one_apply</a> <a href="#p70">apply_xor</a> <a href="#p85">mixColumn_eq</a> <a href="#p91">invMixMat_mul_mixMat</a> <a href="#p92">mixMat_mul_invMixMat</a> <a href="#p94">invMixColumn_mixColumn</a> <a href="#p97">mixColumn_invMixColumn</a> <a href="#p101">mixColumn_xor</a></nav>
+<section class="proof" id="p53">
+<h2>dot_apply <span class="line">line 54</span></h2>
+<pre class="code">theorem dot_apply (r : Word) (b : Mat) (w : Word) : dot r (b.apply w) = dot (row r b) w := by</pre>
+<p class="words">In words: dot r (b.apply w) equals dot (row r b) w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">r : Word
+b : Mat
+w : Word
+⊢ dot r (b.apply w) = dot (row r b) w</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨r0, r1, r2, r3⟩ := r</code><span class="change">+r0  +r1  +r2  +r3  −r</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">b : Mat
+w : Word
+r0 r1 r2 r3 : Byte
+⊢ dot { b0 := r0, b1 := r1, b2 := r2, b3 := r3 } (b.apply w) = dot (row { b0 := r0, b1 := r1, b2 := r2, b3 := r3 } b) w</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨⟨a00, a01, a02, a03⟩, ⟨a10, a11, a12, a13⟩, ⟨a20, a21, a22, a23⟩, ⟨a30, a31, a32, a33⟩⟩ := b</code><span class="change">+a00  +a01  +a02  +a03  +a10  +a11  +a12  +a13  +a20  +a21  +a22  +a23  +a30  +a31  +a32  +a33  −b</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">w : Word
+r0 r1 r2 r3 a00 a01 a02 a03 a10 a11 a12 a13 a20 a21 a22 a23 a30 a31 a32 a33 : Byte
+⊢ dot { b0 := r0, b1 := r1, b2 := r2, b3 := r3 }
+    ({ r0 := { b0 := a00, b1 := a01, b2 := a02, b3 := a03 }, r1 := { b0 := a10, b1 := a11, b2 := a12, b3 := a13 },
+          r2 := { b0 := a20, b1 := a21, b2 := a22, b3 := a23 },
+          r3 := { b0 := a30, b1 := a31, b2 := a32, b3 := a33 } }.apply
+      w) =
+  dot
+    (row { b0 := r0, b1 := r1, b2 := r2, b3 := r3 }
+      { r0 := { b0 := a00, b1 := a01, b2 := a02, b3 := a03 }, r1 := { b0 := a10, b1 := a11, b2 := a12, b3 := a13 },
+        r2 := { b0 := a20, b1 := a21, b2 := a22, b3 := a23 }, r3 := { b0 := a30, b1 := a31, b2 := a32, b3 := a33 } })
+    w</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨w0, w1, w2, w3⟩ := w</code><span class="change">+w0  +w1  +w2  +w3  −w</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">r0 r1 r2 r3 a00 a01 a02 a03 a10 a11 a12 a13 a20 a21 a22 a23 a30 a31 a32 a33 w0 w1 w2 w3 : Byte
+⊢ dot { b0 := r0, b1 := r1, b2 := r2, b3 := r3 }
+    ({ r0 := { b0 := a00, b1 := a01, b2 := a02, b3 := a03 }, r1 := { b0 := a10, b1 := a11, b2 := a12, b3 := a13 },
+          r2 := { b0 := a20, b1 := a21, b2 := a22, b3 := a23 },
+          r3 := { b0 := a30, b1 := a31, b2 := a32, b3 := a33 } }.apply
+      { b0 := w0, b1 := w1, b2 := w2, b3 := w3 }) =
+  dot
+    (row { b0 := r0, b1 := r1, b2 := r2, b3 := r3 }
+      { r0 := { b0 := a00, b1 := a01, b2 := a02, b3 := a03 }, r1 := { b0 := a10, b1 := a11, b2 := a12, b3 := a13 },
+        r2 := { b0 := a20, b1 := a21, b2 := a22, b3 := a23 }, r3 := { b0 := a30, b1 := a31, b2 := a32, b3 := a33 } })
+    { b0 := w0, b1 := w1, b2 := w2, b3 := w3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [dot, apply, row, col0, col1, col2, col3, mul_xor, xor_mul, mul_assoc]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">r0 r1 r2 r3 a00 a01 a02 a03 a10 a11 a12 a13 a20 a21 a22 a23 a30 a31 a32 a33 w0 w1 w2 w3 : Byte
+⊢ AES.mul r0 (AES.mul a00 w0) ^^^ AES.mul r0 (AES.mul a01 w1) ^^^ AES.mul r0 (AES.mul a02 w2) ^^^
+          AES.mul r0 (AES.mul a03 w3) ^^^
+        (AES.mul r1 (AES.mul a10 w0) ^^^ AES.mul r1 (AES.mul a11 w1) ^^^ AES.mul r1 (AES.mul a12 w2) ^^^
+          AES.mul r1 (AES.mul a13 w3)) ^^^
+      (AES.mul r2 (AES.mul a20 w0) ^^^ AES.mul r2 (AES.mul a21 w1) ^^^ AES.mul r2 (AES.mul a22 w2) ^^^
+        AES.mul r2 (AES.mul a23 w3)) ^^^
+    (AES.mul r3 (AES.mul a30 w0) ^^^ AES.mul r3 (AES.mul a31 w1) ^^^ AES.mul r3 (AES.mul a32 w2) ^^^
+      AES.mul r3 (AES.mul a33 w3)) =
+  AES.mul r0 (AES.mul a00 w0) ^^^ AES.mul r1 (AES.mul a10 w0) ^^^ AES.mul r2 (AES.mul a20 w0) ^^^
+          AES.mul r3 (AES.mul a30 w0) ^^^
+        (AES.mul r0 (AES.mul a01 w1) ^^^ AES.mul r1 (AES.mul a11 w1) ^^^ AES.mul r2 (AES.mul a21 w1) ^^^
+          AES.mul r3 (AES.mul a31 w1)) ^^^
+      (AES.mul r0 (AES.mul a02 w2) ^^^ AES.mul r1 (AES.mul a12 w2) ^^^ AES.mul r2 (AES.mul a22 w2) ^^^
+        AES.mul r3 (AES.mul a32 w2)) ^^^
+    (AES.mul r0 (AES.mul a03 w3) ^^^ AES.mul r1 (AES.mul a13 w3) ^^^ AES.mul r2 (AES.mul a23 w3) ^^^
+      AES.mul r3 (AES.mul a33 w3))</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>ac_rfl</code><span class="change">goals accomplished</span></div><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p61">
+<h2>apply_apply <span class="line">line 62</span></h2>
+<pre class="code">theorem apply_apply (a b : Mat) (w : Word) : a.apply (b.apply w) = (a.mul b).apply w := by</pre>
+<p class="words">In words: a.apply (b.apply w) equals (a.mul b).apply w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">a b : Mat
+w : Word
+⊢ a.apply (b.apply w) = (a.mul b).apply w</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [mul]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">a b : Mat
+w : Word
+⊢ a.apply (b.apply w) = { r0 := row a.r0 b, r1 := row a.r1 b, r2 := row a.r2 b, r3 := row a.r3 b }.apply w</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>rw [apply, dot_apply, dot_apply, dot_apply, dot_apply]</code><span class="change">goal rewritten</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><pre class="goal">a b : Mat
+w : Word
+⊢ { b0 := dot (row a.r0 b) w, b1 := dot (row a.r1 b) w, b2 := dot (row a.r2 b) w, b3 := dot (row a.r3 b) w } =
+  { r0 := row a.r0 b, r1 := row a.r1 b, r2 := row a.r2 b, r3 := row a.r3 b }.apply w</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves an equation whose two sides are the same, or compute to the same thing.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p66">
+<h2>one_apply <span class="line">line 67</span></h2>
+<pre class="code">theorem one_apply (w : Word) : one.apply w = w := by</pre>
+<p class="words">In words: one.apply w equals w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ one.apply w = w</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨w0, w1, w2, w3⟩ := w</code><span class="change">+w0  +w1  +w2  +w3  −w</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">w0 w1 w2 w3 : Byte
+⊢ one.apply { b0 := w0, b1 := w1, b2 := w2, b3 := w3 } = { b0 := w0, b1 := w1, b2 := w2, b3 := w3 }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [apply, one, dot, one_mul, zero_mul, UInt8.xor_zero, UInt8.zero_xor]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p70">
+<h2>apply_xor <span class="line">line 71</span></h2>
+<pre class="code">theorem apply_xor (m : Mat) (v w : Word) : m.apply (v ^^^ w) = m.apply v ^^^ m.apply w := by</pre>
+<p class="words">In words: m.apply (v ^^^ w) equals m.apply v ^^^ m.apply w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">m : Mat
+v w : Word
+⊢ m.apply (v ^^^ w) = m.apply v ^^^ m.apply w</pre></div>
+<ol class="steps">
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨v0, v1, v2, v3⟩ := v</code><span class="change">+v0  +v1  +v2  +v3  −v</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">m : Mat
+w : Word
+v0 v1 v2 v3 : Byte
+⊢ m.apply ({ b0 := v0, b1 := v1, b2 := v2, b3 := v3 } ^^^ w) =
+  m.apply { b0 := v0, b1 := v1, b2 := v2, b3 := v3 } ^^^ m.apply w</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>obtain ⟨w0, w1, w2, w3⟩ := w</code><span class="change">+w0  +w1  +w2  +w3  −w</span></div><p class="explain">Takes apart a hypothesis and names the pieces: obtain ⟨x, hx⟩ := h.</p><div class="state"><pre class="goal">m : Mat
+v0 v1 v2 v3 w0 w1 w2 w3 : Byte
+⊢ m.apply ({ b0 := v0, b1 := v1, b2 := v2, b3 := v3 } ^^^ { b0 := w0, b1 := w1, b2 := w2, b3 := w3 }) =
+  m.apply { b0 := v0, b1 := v1, b2 := v2, b3 := v3 } ^^^ m.apply { b0 := w0, b1 := w1, b2 := w2, b3 := w3 }</pre></div></li>
+<li class="step" tabindex="0"><div class="tactic"><code>simp only [apply, dot, Word.xor_def, mul_xor]</code><span class="change">goal rewritten</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><pre class="goal">m : Mat
+v0 v1 v2 v3 w0 w1 w2 w3 : Byte
+⊢ {
+    b0 :=
+      AES.mul m.r0.b0 v0 ^^^ AES.mul m.r0.b0 w0 ^^^ (AES.mul m.r0.b1 v1 ^^^ AES.mul m.r0.b1 w1) ^^^
+          (AES.mul m.r0.b2 v2 ^^^ AES.mul m.r0.b2 w2) ^^^
+        (AES.mul m.r0.b3 v3 ^^^ AES.mul m.r0.b3 w3),
+    b1 :=
+      AES.mul m.r1.b0 v0 ^^^ AES.mul m.r1.b0 w0 ^^^ (AES.mul m.r1.b1 v1 ^^^ AES.mul m.r1.b1 w1) ^^^
+          (AES.mul m.r1.b2 v2 ^^^ AES.mul m.r1.b2 w2) ^^^
+        (AES.mul m.r1.b3 v3 ^^^ AES.mul m.r1.b3 w3),
+    b2 :=
+      AES.mul m.r2.b0 v0 ^^^ AES.mul m.r2.b0 w0 ^^^ (AES.mul m.r2.b1 v1 ^^^ AES.mul m.r2.b1 w1) ^^^
+          (AES.mul m.r2.b2 v2 ^^^ AES.mul m.r2.b2 w2) ^^^
+        (AES.mul m.r2.b3 v3 ^^^ AES.mul m.r2.b3 w3),
+    b3 :=
+      AES.mul m.r3.b0 v0 ^^^ AES.mul m.r3.b0 w0 ^^^ (AES.mul m.r3.b1 v1 ^^^ AES.mul m.r3.b1 w1) ^^^
+          (AES.mul m.r3.b2 v2 ^^^ AES.mul m.r3.b2 w2) ^^^
+        (AES.mul m.r3.b3 v3 ^^^ AES.mul m.r3.b3 w3) } =
+  {
+    b0 :=
+      AES.mul m.r0.b0 v0 ^^^ AES.mul m.r0.b1 v1 ^^^ AES.mul m.r0.b2 v2 ^^^ AES.mul m.r0.b3 v3 ^^^
+        (AES.mul m.r0.b0 w0 ^^^ AES.mul m.r0.b1 w1 ^^^ AES.mul m.r0.b2 w2 ^^^ AES.mul m.r0.b3 w3),
+    b1 :=
+      AES.mul m.r1.b0 v0 ^^^ AES.mul m.r1.b1 v1 ^^^ AES.mul m.r1.b2 v2 ^^^ AES.mul m.r1.b3 v3 ^^^
+        (AES.mul m.r1.b0 w0 ^^^ AES.mul m.r1.b1 w1 ^^^ AES.mul m.r1.b2 w2 ^^^ AES.mul m.r1.b3 w3),
+    b2 :=
+      AES.mul m.r2.b0 v0 ^^^ AES.mul m.r2.b1 v1 ^^^ AES.mul m.r2.b2 v2 ^^^ AES.mul m.r2.b3 v3 ^^^
+        (AES.mul m.r2.b0 w0 ^^^ AES.mul m.r2.b1 w1 ^^^ AES.mul m.r2.b2 w2 ^^^ AES.mul m.r2.b3 w3),
+    b3 :=
+      AES.mul m.r3.b0 v0 ^^^ AES.mul m.r3.b1 v1 ^^^ AES.mul m.r3.b2 v2 ^^^ AES.mul m.r3.b3 v3 ^^^
+        (AES.mul m.r3.b0 w0 ^^^ AES.mul m.r3.b1 w1 ^^^ AES.mul m.r3.b2 w2 ^^^ AES.mul m.r3.b3 w3) }</pre></div></li>
+<li class="step done" tabindex="0"><div class="tactic"><code>congr 1 &lt;;&gt; ac_rfl</code><span class="change">goals accomplished</span></div><p class="explain">Proves f a = f b by proving a = b.</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p85">
+<h2>mixColumn_eq <span class="line">line 86</span></h2>
+<pre class="code">theorem mixColumn_eq (w : Word) : mixColumn w = mixMat.apply w := by</pre>
+<p class="words">In words: mixColumn w equals mixMat.apply w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ mixColumn w = mixMat.apply w</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [mixColumn, Mat.apply, mixMat, dot, one_mul]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p91">
+<h2>invMixMat_mul_mixMat <span class="line">line 92</span></h2>
+<pre class="code">theorem invMixMat_mul_mixMat : invMixMat.mul mixMat = Mat.one := by decide +kernel</pre>
+<p class="words">In words: invMixMat.mul mixMat equals Mat.one</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">⊢ invMixMat.mul mixMat = Mat.one</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">Proves a statement by computing its answer, for statements about specific values (2 + 2 = 4, 7 is prime…).</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p92">
+<h2>mixMat_mul_invMixMat <span class="line">line 93</span></h2>
+<pre class="code">theorem mixMat_mul_invMixMat : mixMat.mul invMixMat = Mat.one := by decide +kernel</pre>
+<p class="words">In words: mixMat.mul invMixMat equals Mat.one</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">⊢ mixMat.mul invMixMat = Mat.one</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>decide +kernel</code><span class="change">goals accomplished</span></div><p class="explain">Proves a statement by computing its answer, for statements about specific values (2 + 2 = 4, 7 is prime…).</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p94">
+<h2>invMixColumn_mixColumn <span class="line">line 95</span></h2>
+<pre class="code">theorem invMixColumn_mixColumn (w : Word) : invMixColumn (mixColumn w) = w := by</pre>
+<p class="words">In words: invMixColumn (mixColumn w) equals w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ invMixColumn (mixColumn w) = w</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mixColumn_eq, invMixColumn_eq, Mat.apply_apply, invMixMat_mul_mixMat, Mat.one_apply]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p97">
+<h2>mixColumn_invMixColumn <span class="line">line 98</span></h2>
+<pre class="code">theorem mixColumn_invMixColumn (w : Word) : mixColumn (invMixColumn w) = w := by</pre>
+<p class="words">In words: mixColumn (invMixColumn w) equals w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">w : Word
+⊢ mixColumn (invMixColumn w) = w</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>rw [mixColumn_eq, invMixColumn_eq, Mat.apply_apply, mixMat_mul_invMixMat, Mat.one_apply]</code><span class="change">goals accomplished</span></div><p class="explain">Rewrites: given h : a = b, replaces a by b in the goal. Several at once: rw [h1, h2]. Right to left: rw [← h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<section class="proof" id="p101">
+<h2>mixColumn_xor <span class="line">line 102</span></h2>
+<pre class="code">theorem mixColumn_xor (v w : Word) : mixColumn (v ^^^ w) = mixColumn v ^^^ mixColumn w := by</pre>
+<p class="words">In words: mixColumn (v ^^^ w) equals mixColumn v ^^^ mixColumn w</p>
+<div class="state start"><div class="label">Goal to prove</div><pre class="goal">v w : Word
+⊢ mixColumn (v ^^^ w) = mixColumn v ^^^ mixColumn w</pre></div>
+<ol class="steps">
+<li class="step done" tabindex="0"><div class="tactic"><code>simp only [mixColumn_eq, Mat.apply_xor]</code><span class="change">goals accomplished</span></div><p class="explain">Simplifies the goal with hundreds of known rules, often finishing it. Give it extra facts in brackets: simp [h].</p><div class="state"><div class="none">✓ No goals left: this part of the proof is complete.</div></div></li>
+</ol>
+</section>
+<details class="source"><summary>The whole file</summary><pre class="code">import AES.Spec
+
+/-!
+# Columns as vectors over GF(2⁸)
+
+`MixColumns` and `InvMixColumns` multiply each column by a 4&#215;4 matrix. Rather than expanding
+`InvMixColumns ∘ MixColumns` into sixty-four products and regrouping them by hand, this proves once that
+applying two matrices in turn is applying their product, and then lets the kernel multiply the two
+matrices of FIPS-197 and see the identity.
+-/
+
+namespace AES
+
+set_option maxHeartbeats 0
+
+/-- A 4&#215;4 matrix over GF(2⁸), by rows. -/
+structure Mat where
+  /-- Row 0. -/
+  r0 : Word
+  /-- Row 1. -/
+  r1 : Word
+  /-- Row 2. -/
+  r2 : Word
+  /-- Row 3. -/
+  r3 : Word
+  deriving DecidableEq, Repr
+
+/-- `Σₖ rₖ • wₖ`. -/
+def dot (r w : Word) : Byte := mul r.b0 w.b0 ^^^ mul r.b1 w.b1 ^^^ mul r.b2 w.b2 ^^^ mul r.b3 w.b3
+
+namespace Mat
+
+/-- The matrix times a column. -/
+def apply (m : Mat) (w : Word) : Word := ⟨dot m.r0 w, dot m.r1 w, dot m.r2 w, dot m.r3 w⟩
+
+/-- Column 0 of a matrix. -/
+def col0 (m : Mat) : Word := ⟨m.r0.b0, m.r1.b0, m.r2.b0, m.r3.b0⟩
+/-- Column 1 of a matrix. -/
+def col1 (m : Mat) : Word := ⟨m.r0.b1, m.r1.b1, m.r2.b1, m.r3.b1⟩
+/-- Column 2 of a matrix. -/
+def col2 (m : Mat) : Word := ⟨m.r0.b2, m.r1.b2, m.r2.b2, m.r3.b2⟩
+/-- Column 3 of a matrix. -/
+def col3 (m : Mat) : Word := ⟨m.r0.b3, m.r1.b3, m.r2.b3, m.r3.b3⟩
+
+/-- The row vector `a` times the matrix `b`. -/
+def row (a : Word) (b : Mat) : Word := ⟨dot a b.col0, dot a b.col1, dot a b.col2, dot a b.col3⟩
+
+/-- The matrix product. -/
+def mul (a b : Mat) : Mat := ⟨row a.r0 b, row a.r1 b, row a.r2 b, row a.r3 b⟩
+
+/-- The identity matrix. -/
+def one : Mat := ⟨⟨1, 0, 0, 0⟩, ⟨0, 1, 0, 0⟩, ⟨0, 0, 1, 0⟩, ⟨0, 0, 0, 1⟩⟩
+
+theorem dot_apply (r : Word) (b : Mat) (w : Word) : dot r (b.apply w) = dot (row r b) w := by
+  obtain ⟨r0, r1, r2, r3⟩ := r
+  obtain ⟨⟨a00, a01, a02, a03⟩, ⟨a10, a11, a12, a13⟩, ⟨a20, a21, a22, a23⟩, ⟨a30, a31, a32, a33⟩⟩ := b
+  obtain ⟨w0, w1, w2, w3⟩ := w
+  simp only [dot, apply, row, col0, col1, col2, col3, mul_xor, xor_mul, mul_assoc]
+  ac_rfl
+
+/-- Applying `b` and then `a` is applying `a * b`. -/
+theorem apply_apply (a b : Mat) (w : Word) : a.apply (b.apply w) = (a.mul b).apply w := by
+  simp only [mul]
+  rw [apply, dot_apply, dot_apply, dot_apply, dot_apply]
+  rfl
+
+theorem one_apply (w : Word) : one.apply w = w := by
+  obtain ⟨w0, w1, w2, w3⟩ := w
+  simp only [apply, one, dot, one_mul, zero_mul, UInt8.xor_zero, UInt8.zero_xor]
+
+theorem apply_xor (m : Mat) (v w : Word) : m.apply (v ^^^ w) = m.apply v ^^^ m.apply w := by
+  obtain ⟨v0, v1, v2, v3⟩ := v
+  obtain ⟨w0, w1, w2, w3⟩ := w
+  simp only [apply, dot, Word.xor_def, mul_xor]
+  congr 1 &lt;;&gt; ac_rfl
+
+end Mat
+
+/-- The matrix of `MixColumns`, eq. (5.6). -/
+def mixMat : Mat := ⟨⟨2, 3, 1, 1⟩, ⟨1, 2, 3, 1⟩, ⟨1, 1, 2, 3⟩, ⟨3, 1, 1, 2⟩⟩
+
+/-- The matrix of `InvMixColumns`, eq. (5.17). -/
+def invMixMat : Mat := ⟨⟨0x0e, 0x0b, 0x0d, 0x09⟩, ⟨0x09, 0x0e, 0x0b, 0x0d⟩, ⟨0x0d, 0x09, 0x0e, 0x0b⟩,
+  ⟨0x0b, 0x0d, 0x09, 0x0e⟩⟩
+
+theorem mixColumn_eq (w : Word) : mixColumn w = mixMat.apply w := by
+  simp only [mixColumn, Mat.apply, mixMat, dot, one_mul]
+
+theorem invMixColumn_eq (w : Word) : invMixColumn w = invMixMat.apply w := rfl
+
+/-- The two matrices of FIPS-197 are inverse to each other. The kernel multiplies them out. -/
+theorem invMixMat_mul_mixMat : invMixMat.mul mixMat = Mat.one := by decide +kernel
+theorem mixMat_mul_invMixMat : mixMat.mul invMixMat = Mat.one := by decide +kernel
+
+theorem invMixColumn_mixColumn (w : Word) : invMixColumn (mixColumn w) = w := by
+  rw [mixColumn_eq, invMixColumn_eq, Mat.apply_apply, invMixMat_mul_mixMat, Mat.one_apply]
+
+theorem mixColumn_invMixColumn (w : Word) : mixColumn (invMixColumn w) = w := by
+  rw [mixColumn_eq, invMixColumn_eq, Mat.apply_apply, mixMat_mul_invMixMat, Mat.one_apply]
+
+/-- `MixColumns` is additive, so it maps differences to differences. -/
+theorem mixColumn_xor (v w : Word) : mixColumn (v ^^^ w) = mixColumn v ^^^ mixColumn w := by
+  simp only [mixColumn_eq, Mat.apply_xor]
+
+end AES
+</pre></details>
+<footer>Made with <a href="https://github.com/keithadler/leanstudio">Lean Studio</a>, by Keith Adler (<a href="https://x.com/keithadler">@keithadler</a>). Goals are exactly as Lean reported them.</footer>
+</main>
+<script>
+const steps = [...document.querySelectorAll('.step')];
+let at = -1;
+function go(i) {
+  if (i < 0 || i >= steps.length) return;
+  steps.forEach(s => s.classList.remove('current'));
+  at = i; steps[i].classList.add('current'); steps[i].focus({ preventScroll: true });
+  steps[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+steps.forEach((s, i) => s.addEventListener('click', () => go(i)));
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'j') { go(at + 1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft' || e.key === 'k') { go(at - 1); e.preventDefault(); }
+});</script>
+</body></html>

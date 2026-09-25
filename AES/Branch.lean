@@ -177,7 +177,7 @@ theorem branch_high (a : Word) (hw : 3 ≤ a.wt) : 5 ≤ a.wt + (mixMat.apply a)
 
 /-! ## The branch number -/
 
-/-- **The branch number of `MixColumns` is at least 5**: a nonzero column and its image have at least
+/-- The branch number of `MixColumns` is at least 5: a nonzero column and its image have at least
 five nonzero bytes between them. -/
 theorem branch_mixColumn (a : Word) (ha : a ≠ 0) : 5 ≤ a.wt + (mixColumn a).wt := by
   rw [mixColumn_eq]
@@ -185,7 +185,7 @@ theorem branch_mixColumn (a : Word) (ha : a ≠ 0) : 5 ≤ a.wt + (mixColumn a).
   · exact branch_low a ha (by omega)
   · exact branch_high a h
 
-/-- **and exactly 5**: one changed byte changes all four. -/
+/-- and exactly 5: one changed byte changes all four. -/
 theorem branch_mixColumn_tight : ∃ a : Word, a ≠ 0 ∧ a.wt + (mixColumn a).wt = 5 :=
   ⟨⟨1, 0, 0, 0⟩, by decide, by decide +kernel⟩
 

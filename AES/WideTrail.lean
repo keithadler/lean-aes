@@ -1,5 +1,4 @@
 import AES.Branch
-import AES.RoundTrip
 
 /-!
 # Four rounds activate at least 25 S-boxes
@@ -36,6 +35,10 @@ def aesRound (k s : State) : State := addRoundKey (mixColumns (shiftRows (subByt
 /-- The number of nonzero bytes of a state: for a difference, the number of active S-boxes it meets. -/
 def State.wt (s : State) : Nat := s.c0.wt + s.c1.wt + s.c2.wt + s.c3.wt
 
+/-- How many of the sixteen S-boxes of a `SubBytes` layer see different inputs when it is applied to `x`
+and to `y`: the active S-boxes. -/
+def active (x y : State) : Nat := (x ^^^ y).wt
+
 /-- `1` if the column is nonzero. -/
 def nzw (w : Word) : Nat := if w.wt = 0 then 0 else 1
 
@@ -49,8 +52,9 @@ theorem nzw_le (w : Word) : nzw w ≤ 1 := by unfold nzw; split <;> omega
 theorem nz_le_nzw (a b c d : Byte) :
     nz a ≤ nzw ⟨a, b, c, d⟩ ∧ nz b ≤ nzw ⟨a, b, c, d⟩ ∧ nz c ≤ nzw ⟨a, b, c, d⟩ ∧ nz d ≤ nzw ⟨a, b, c, d⟩ := by
   have := nz_le a; have := nz_le b; have := nz_le c; have := nz_le d
-  unfold nzw Word.wt
-  split <;> simp_all <;> omega
+  simp only [nzw, Word.wt]
+  by_cases h : nz a + nz b + nz c + nz d = 0 <;> simp only [h, ↓reduceIte] <;>
+    exact ⟨by omega, by omega, by omega, by omega⟩
 
 theorem nzw_le_wt (w : Word) : nzw w ≤ w.wt := by unfold nzw; split <;> omega
 
@@ -103,7 +107,7 @@ theorem aesRound_xor (k x y : State) :
   generalize mixColumns (shiftRows (subBytes y)) = q
   simp only [State.xor_def, Word.xor_def, xor_xor_cancel]
 
-/-- **Two rounds**: a round's input difference and the next round's input difference have at least
+/-- Two rounds: a round's input difference and the next round's input difference have at least
 `5 ×` (active columns entering `MixColumns`) nonzero bytes between them. -/
 theorem two_rounds (k x y : State) :
     5 * (mcIn x y).ac ≤ (x ^^^ y).wt + (aesRound k x ^^^ aesRound k y).wt := by
@@ -229,13 +233,13 @@ theorem wt_pos_of_ne {x y : State} (h : x ≠ y) : 0 < (x ^^^ y).wt := by
     simp [h0]
   · exact h0
 
-/-- **The wide-trail bound.** Two different blocks `x ≠ y` go through four rounds' worth of S-boxes:
+/-- The wide-trail bound. Two different blocks `x ≠ y` go through four rounds' worth of S-boxes:
 the inputs of rounds 1 to 4 are `x`, `R₁ x`, `R₂ (R₁ x)`, `R₃ (R₂ (R₁ x))`, where `Rᵢ` is a full round
 under any round key `kᵢ`. Across those four layers, at least 25 S-boxes see different inputs. -/
 theorem four_rounds_active (k1 k2 k3 x y : State) (h : x ≠ y) :
-    25 ≤ (x ^^^ y).wt + (aesRound k1 x ^^^ aesRound k1 y).wt +
-      (aesRound k2 (aesRound k1 x) ^^^ aesRound k2 (aesRound k1 y)).wt +
-      (aesRound k3 (aesRound k2 (aesRound k1 x)) ^^^ aesRound k3 (aesRound k2 (aesRound k1 y))).wt :=
+    25 ≤ active x y + active (aesRound k1 x) (aesRound k1 y) +
+      active (aesRound k2 (aesRound k1 x)) (aesRound k2 (aesRound k1 y)) +
+      active (aesRound k3 (aesRound k2 (aesRound k1 x))) (aesRound k3 (aesRound k2 (aesRound k1 y))) :=
   four_rounds_count _ _ _ _ (mcIn x y) (mcIn (aesRound k1 x) (aesRound k1 y))
     (mcIn (aesRound k2 (aesRound k1 x)) (aesRound k2 (aesRound k1 y)))
     (two_rounds k1 x y) (two_rounds k3 _ _) (wt_pos_of_ne h) (wt_mcIn x y) (wt_mcIn _ _)
@@ -243,9 +247,9 @@ theorem four_rounds_active (k1 k2 k3 x y : State) (h : x ≠ y) :
 
 /-- The same, for any four consecutive rounds of AES-256 encryption under any key schedule. -/
 theorem cipherRounds_four_active (rk : Nat → State) (r : Nat) (x y : State) (h : x ≠ y) :
-    25 ≤ (x ^^^ y).wt + (cipherRounds rk 1 r x ^^^ cipherRounds rk 1 r y).wt +
-      (cipherRounds rk 2 r x ^^^ cipherRounds rk 2 r y).wt +
-      (cipherRounds rk 3 r x ^^^ cipherRounds rk 3 r y).wt :=
+    25 ≤ active x y + active (cipherRounds rk 1 r x) (cipherRounds rk 1 r y) +
+      active (cipherRounds rk 2 r x) (cipherRounds rk 2 r y) +
+      active (cipherRounds rk 3 r x) (cipherRounds rk 3 r y) :=
   four_rounds_active (rk r) (rk (r + 1)) (rk (r + 2)) x y h
 
 end AES

@@ -1,0 +1,73 @@
+# Every push: Lean builds it (its kernel checks every theorem), the compiled specification is compared
+# with OpenSSL, Tenet re-derives every declaration with an independent kernel, and LeanViz turns the
+# result into a browsable site. On main the site is published to GitHub Pages.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install elan
+        run: |
+          curl -sSfL https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          ./elan-init -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # Tenet and LeanViz are built from source, as LeanViz's own workflows do, so the reader matches the
+      # newest Lean the checker supports.
+      - name: Build Tenet
+        run: |
+          git clone --depth 1 https://github.com/keithadler/tenet.git .lake/leanviz/tenet
+          dotnet build .lake/leanviz/tenet/src/Tenet.Cli -c Release -f net10.0
+
+      - name: Verify (Lean, OpenSSL, Tenet)
+        env:
+          TENET: dotnet ${{ github.workspace }}/.lake/leanviz/tenet/src/Tenet.Cli/bin/Release/net10.0/tenet.dll
+        run: tools/verify.sh
+
+      - name: Build the LeanViz site
+        run: tools/leanviz.sh
+
+      - name: Keep the verdict and the site
+        uses: actions/upload-artifact@v4
+        with:
+          name: lean-aes-verified
+          path: |
+            check.json
+            site/
+
+      - name: Stage the site for Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  # Needs Pages enabled for the repository with "GitHub Actions" as the source.
+  pages:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}?p=aes
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

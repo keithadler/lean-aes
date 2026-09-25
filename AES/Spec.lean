@@ -63,13 +63,21 @@ def invMixColumns (s : State) : State := s.mapCols invMixColumn
 
 /-- A 256-bit key: eight words, `key[4i .. 4i+3]` in word `i`. -/
 structure Key where
+  /-- Key word 0: key bytes 0–3. -/
   w0 : Word
+  /-- Key word 1: key bytes 4–7. -/
   w1 : Word
+  /-- Key word 2: key bytes 8–11. -/
   w2 : Word
+  /-- Key word 3: key bytes 12–15. -/
   w3 : Word
+  /-- Key word 4: key bytes 16–19. -/
   w4 : Word
+  /-- Key word 5: key bytes 20–23. -/
   w5 : Word
+  /-- Key word 6: key bytes 24–27. -/
   w6 : Word
+  /-- Key word 7: key bytes 28–31. -/
   w7 : Word
   deriving DecidableEq, Repr
 
@@ -101,13 +109,21 @@ def rcon (j : Nat) : Word := ⟨rconByte j, 0, 0, 0⟩
 
 /-- The last eight words `w[i-8] … w[i-1]`, oldest first. -/
 structure Window where
+  /-- `w[i-8]`. -/
   w0 : Word
+  /-- `w[i-7]`. -/
   w1 : Word
+  /-- `w[i-6]`. -/
   w2 : Word
+  /-- `w[i-5]`. -/
   w3 : Word
+  /-- `w[i-4]`. -/
   w4 : Word
+  /-- `w[i-3]`. -/
   w5 : Word
+  /-- `w[i-2]`. -/
   w6 : Word
+  /-- `w[i-1]`. -/
   w7 : Word
 
 /-- The body of the loop in Algorithm 2 for `Nk = 8`: `w[i]` from `w[i-8]` and `w[i-1]`. -/
@@ -163,10 +179,10 @@ def invCipher (rk : Nat → State) (input : State) : State :=
   let s := invCipherRounds rk (Nr - 1) (Nr - 1) s
   addRoundKey (invSubBytes (invShiftRows s)) (rk 0)
 
-/-- **AES-256 encryption** of one block: `Cipher(in, 14, KeyExpansion(key))`. -/
+/-- AES-256 encryption of one block: `Cipher(in, 14, KeyExpansion(key))`. -/
 def encrypt (key : Key) (block : State) : State := cipher (roundKey (keyExpansion key)) block
 
-/-- **AES-256 decryption** of one block: `InvCipher(in, 14, KeyExpansion(key))`. -/
+/-- AES-256 decryption of one block: `InvCipher(in, 14, KeyExpansion(key))`. -/
 def decrypt (key : Key) (block : State) : State := invCipher (roundKey (keyExpansion key)) block
 
 end AES
