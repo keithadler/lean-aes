@@ -42,6 +42,22 @@ theorem four_rounds_active (k1 k2 k3 x y : State) (h : x ≠ y) :
       active (aesRound k3 (aesRound k2 (aesRound k1 x))) (aesRound k3 (aesRound k2 (aesRound k1 y)))
 ```
 
+## See it
+
+Four pictures of the proofs, drawn in the infoview of VS Code (with the Lean 4 extension) or Lean Studio.
+Open a file in [`Pictures/`](Pictures), put the cursor on its `#widget` line and open the infoview. Every
+number is computed by the same Lean definitions the theorems are about; the page only lays it out.
+
+| | |
+| --- | --- |
+| ![AES-256 encrypting the FIPS-197 C.3 block step by step in Lean Studio, ending at the published ciphertext](docs/images/picture-rounds.png) | ![The S-box difference table as a 256 by 256 heatmap in Lean Studio: no cell above 4](docs/images/picture-differences.png) |
+| **[Rounds](Pictures/Rounds.lean)**: all 57 steps of FIPS-197 C.3, with a slider, the round keys, and the bytes each step changes. `trace_ends_in_encrypt` proves the last state is `encrypt`. | **[Differences](Pictures/Differences.lean)**: the difference table, 65,280 cells, hover for the inputs. None exceeds 4 (`ddt_le_four`); `ddtRow_one` checks a drawn row against `ddt` cell by cell. |
+| ![Type a column and see MixColumns of it: the nonzero bytes in and out add up to at least 5](docs/images/picture-branch.png) | ![Four rounds of differences for a pair that activates exactly 4 + 1 + 4 + 16 = 25 S-boxes](docs/images/picture-trail.png) |
+| **[Branch](Pictures/Branch.lean)**: type any column and watch `MixColumns` spread it: in plus out is at least 5 (`branch_mixColumn`). The page checks its arithmetic against Lean's `mixColumn` first. | **[Trail](Pictures/Trail.lean)**: the active S-boxes of four rounds against the proved 25. **`tight_pair_25`** proves a pair that activates exactly 4 + 1 + 4 + 16 = 25, so the bound of `four_rounds_active` cannot be raised. |
+
+The pictures were written with the assistance of Claude (Anthropic), working through Lean Studio's MCP
+server.
+
 ## What is not claimed
 
 - **That AES is secure.** Nobody can prove AES-256 is a pseudorandom permutation, in Lean or anywhere
@@ -135,6 +151,7 @@ builds and serves it locally.
 | [`AES/WideTrail.lean`](AES/WideTrail.lean) | 25 active S-boxes in four rounds |
 | [`AES/Digits.lean`](AES/Digits.lean) | counting with one big number per table row |
 | [`AES/SBoxProps.lean`](AES/SBoxProps.lean) | differential uniformity and nonlinearity |
+| [`Pictures/`](Pictures) | the four infoview pictures above, and `tight_pair_25` |
 | [`Main.lean`](Main.lean) | `aes256`, the specification as a command-line tool |
 | [`tools/`](tools) | `verify.sh`, `crosscheck.py`, `leanviz.sh`, `leanstudio.py` |
 | [`.leanstudio/commands.json`](.leanstudio/commands.json) | the project's commands in Lean Studio's palette |

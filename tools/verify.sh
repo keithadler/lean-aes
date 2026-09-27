@@ -33,4 +33,4 @@ echo "== Tenet: what the headline theorems rest on"
 $TENET axioms . \
   AES.fips197_C3_encrypt AES.sp800_38a_F15 AES.decrypt_encrypt AES.encrypt_decrypt \
   AES.sbox_eq_affine_inv AES.ddt_le_four AES.agree_bounds \
-  AES.branch_mixColumn AES.four_rounds_active
+  AES.branch_mixColumn AES.four_rounds_active Pictures.tight_pair_25

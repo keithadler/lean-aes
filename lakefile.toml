@@ -1,9 +1,13 @@
 name = "aes"
 version = "0.1.0"
-defaultTargets = ["AES", "aes256"]
+defaultTargets = ["AES", "aes256", "Pictures"]
 
 [[lean_lib]]
 name = "AES"
+
+# Pictures of the proofs for the infoview (VS Code, Lean Studio): widgets over the AES definitions.
+[[lean_lib]]
+name = "Pictures"
 
 [[lean_exe]]
 name = "aes256"
