@@ -2,3 +2,6 @@
 /lib/
 /site/
 check.json
+tools/crossimpl/crossimpl-*
+tools/crossimpl/rust/target/
+__pycache__/

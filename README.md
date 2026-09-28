@@ -108,6 +108,21 @@ $ python3 tools/crosscheck.py
 OK: 1024 blocks under 64 random keys agree with OpenSSL (seed 1492312056)
 ```
 
+**Ten other implementations** get the same treatment in `tools/crossimpl/`: OpenSSL, LibreSSL, Go,
+RustCrypto, Python `cryptography`, Apple CommonCrypto, Java, mbedTLS, wolfSSL and Nettle (GnuTLS's
+crypto). The compiled specification computes every expected answer: NIST's AESAVS VarKey and VarTxt
+inputs for AES-256, the FIPS-197 and SP 800-38A examples and random blocks (614 blocks, both directions),
+CTR at the 2^32, 2^64 and 2^128 counter boundaries, and CBC with correct and malformed PKCS #7 padding.
+All ten agree with the specification on every block. Two behaviors of Apple CommonCrypto stand out:
+its CTR counter is 64 bits wide (legal under SP 800-38A, but it parts from the other nine once the low
+64 bits wrap), and its PKCS #7 unpadding checks only the last byte and never reports an error, where the
+other seven with a PKCS #7 mode refuse all six malformed paddings. [The full results](tools/crossimpl/RESULTS.md).
+
+```
+$ python3 tools/crossimpl/vectors.py corpus.json     # every expected answer from aes256 (slow: ~1 s a block)
+$ python3 tools/crossimpl/run.py corpus.json          # needs Go, Rust, Swift, OpenJDK, mbedTLS, wolfSSL, Nettle
+```
+
 **[Lean Studio](https://github.com/keithadler/leanstudio)** is the editor this was written for. Build
 gives each declaration Tenet's badge in the gutter, and its project map summarizes the result:
 
@@ -153,7 +168,7 @@ builds and serves it locally.
 | [`AES/SBoxProps.lean`](AES/SBoxProps.lean) | differential uniformity and nonlinearity |
 | [`Pictures/`](Pictures) | the four infoview pictures above, and `tight_pair_25` |
 | [`Main.lean`](Main.lean) | `aes256`, the specification as a command-line tool |
-| [`tools/`](tools) | `verify.sh`, `crosscheck.py`, `leanviz.sh`, `leanstudio.py` |
+| [`tools/`](tools) | `verify.sh`, `crosscheck.py`, `crossimpl/` (ten other implementations), `leanviz.sh`, `leanstudio.py` |
 | [`.leanstudio/commands.json`](.leanstudio/commands.json) | the project's commands in Lean Studio's palette |
 
 ## Reproduce it

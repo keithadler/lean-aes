@@ -9,6 +9,7 @@ checked against other implementations (`tools/crosscheck.py` compares it with Op
     aes256 encrypt <64 hex digits of key> <32 hex digits of block>
     aes256 decrypt <key> <block>
     aes256 batch            lines of "<key> <block>" on stdin, one ciphertext per line out
+    aes256 batch decrypt    the same, deciphering
 -/
 
 open AES
@@ -34,17 +35,19 @@ def parseArgs (key block : String) : Except String (Key × State) := do
   return (Key.ofNat k, State.ofNat b)
 
 def usage : String :=
-  "usage: aes256 encrypt|decrypt <64-hex key> <32-hex block>\n       aes256 batch   (\"<key> <block>\" lines on stdin)"
+  "usage: aes256 encrypt|decrypt <64-hex key> <32-hex block>\n       aes256 batch [decrypt]   (\"<key> <block>\" lines on stdin)"
 
-partial def batch (stdin : IO.FS.Stream) (stdout : IO.FS.Stream) : IO UInt32 := do
+partial def batch (stdin : IO.FS.Stream) (stdout : IO.FS.Stream) (dec : Bool := false) : IO UInt32 := do
   let line ← stdin.getLine
   if line.isEmpty then return 0
   match (line.trimAscii.toString.splitOn " ").filter (· ≠ "") with
   | [k, b] =>
     match parseArgs k b with
-    | .ok (key, blk) => stdout.putStrLn (encrypt key blk).toHex; batch stdin stdout
+    | .ok (key, blk) =>
+      stdout.putStrLn (if dec then decrypt key blk else encrypt key blk).toHex
+      batch stdin stdout dec
     | .error e => IO.eprintln e; return 1
-  | [] => batch stdin stdout
+  | [] => batch stdin stdout dec
   | _ => IO.eprintln s!"expected \"<key> <block>\", got {line}"; return 1
 
 def main (args : List String) : IO UInt32 := do
@@ -56,4 +59,5 @@ def main (args : List String) : IO UInt32 := do
       return 0
     | .error e => IO.eprintln e; return 1
   | ["batch"] => batch (← IO.getStdin) (← IO.getStdout)
+  | ["batch", "decrypt"] => batch (← IO.getStdin) (← IO.getStdout) true
   | _ => IO.eprintln usage; return 1

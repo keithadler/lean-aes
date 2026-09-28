@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Cross-library AES-256 harness: the Lean specification against every implementation on this machine.
+
+    python3 tools/crossimpl/run.py CORPUS.json
+
+CORPUS.json comes from vectors.py, which computes every expected answer with the compiled Lean
+specification. This runs each library on the same cases and writes tools/crossimpl/RESULTS.md: for the
+block and ctr suites, how many answers agree with Lean; for cbc, which malformed paddings each library
+refuses, as PKCS #7 requires, and which it accepts.
+"""
+import json
+import os
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+BREW = "/opt/homebrew/opt"
+
+
+def sh(cmd, **kw):
+    return subprocess.run(cmd, capture_output=True, **kw)
+
+
+def tsv(corpus):
+    lines = []
+    for b in corpus["block"]:
+        lines.append(f"block\t{b['id']}\t{b['op']}\t{b['key']}\t\t{b['in']}")
+    for c in corpus["ctr"]:
+        lines.append(f"ctr\t{c['id']}\tencrypt\t{c['key']}\t{c['iv']}\t{c['in']}")
+    for c in corpus["cbc"]:
+        lines.append(f"cbc\t{c['id']}\tdecrypt\t{c['key']}\t{c['iv']}\t{c['in']}")
+    return "\n".join(lines) + "\n"
+
+
+def stream_driver(cmd):
+    def run(corpus):
+        r = sh(cmd, input=tsv(corpus).encode())
+        out = {}
+        for line in r.stdout.decode().splitlines():
+            suite, cid, res = line.split("\t", 2)
+            out[(suite, cid)] = res
+        return out
+    return run
+
+
+def openssl_cli(binary):
+    def one(args, data):
+        r = sh([binary, "enc"] + args, input=data)
+        return r.stdout.hex() if r.returncode == 0 else "ERR:" + r.stderr.decode().strip().splitlines()[0][:120]
+
+    def run(corpus):
+        out = {}
+        for b in corpus["block"]:
+            args = ["-aes-256-ecb", "-nopad", "-K", b["key"]] + (["-d"] if b["op"] == "decrypt" else [])
+            out[("block", b["id"])] = one(args, bytes.fromhex(b["in"]))
+        for c in corpus["ctr"]:
+            out[("ctr", c["id"])] = one(["-aes-256-ctr", "-K", c["key"], "-iv", c["iv"]], bytes.fromhex(c["in"]))
+        for c in corpus["cbc"]:
+            out[("cbc", c["id"])] = one(["-d", "-aes-256-cbc", "-K", c["key"], "-iv", c["iv"]],
+                                        bytes.fromhex(c["in"]))
+        return out
+    return run
+
+
+def lean_expected(corpus):
+    out = {}
+    for b in corpus["block"]:
+        out[("block", b["id"])] = b["expect"]
+    for c in corpus["ctr"]:
+        out[("ctr", c["id"])] = c["expect"]
+    for c in corpus["cbc"]:
+        out[("cbc", c["id"])] = c["expect"] if c["valid"] else "ERR:padding"
+    return out
+
+
+def version(cmd, stream="stdout"):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        return (r.stdout if stream == "stdout" else r.stderr).strip().splitlines()[0]
+    except Exception:  # noqa: BLE001
+        return "?"
+
+
+def main():
+    corpus = json.load(open(sys.argv[1]))
+    java = f"{BREW}/openjdk/bin/java"
+    import cryptography
+    libs = [
+        ("Lean (specification)", lean_expected, "lean-aes"),
+        ("OpenSSL", openssl_cli("/opt/homebrew/bin/openssl"), version(["/opt/homebrew/bin/openssl", "version"])),
+        ("LibreSSL", openssl_cli("/usr/bin/openssl"), version(["/usr/bin/openssl", "version"]) + " (macOS system)"),
+        ("Go", stream_driver([os.path.join(HERE, "crossimpl-go")]), version(["go", "version"])),
+        ("RustCrypto", stream_driver([os.path.join(HERE, "rust", "target", "release", "crossimpl-rustcrypto")]),
+         "aes 0.8, ctr 0.9, cbc 0.1"),
+        ("Python cryptography", stream_driver([sys.executable, os.path.join(HERE, "pyca.py")]),
+         "cryptography " + cryptography.__version__),
+        ("Apple CommonCrypto", stream_driver([os.path.join(HERE, "crossimpl-apple")]),
+         "macOS " + version(["sw_vers", "-productVersion"])),
+        ("Java", stream_driver([java, os.path.join(HERE, "java", "Main.java")]),
+         "OpenJDK " + version([java, "-version"], "stderr").split('"')[1] + " (SunJCE)"),
+        ("mbedTLS", stream_driver([os.path.join(HERE, "crossimpl-mbedtls")]),
+         "mbedTLS " + version(["brew", "list", "--versions", "mbedtls"]).split()[-1] + " (PSA API)"),
+        ("wolfSSL", stream_driver([os.path.join(HERE, "crossimpl-wolfssl")]),
+         "wolfSSL " + version(["brew", "list", "--versions", "wolfssl"]).split()[-1] + " (EVP layer)"),
+        ("Nettle", stream_driver([os.path.join(HERE, "crossimpl-nettle")]),
+         "Nettle " + version(["brew", "list", "--versions", "nettle"]).split()[-1] + " (GnuTLS's crypto)"),
+    ]
+    results = {}
+    for name, fn, ver in libs:
+        print(f"running {name} ({ver})", flush=True)
+        results[name] = {"version": ver, "out": fn(corpus)}
+    write(corpus, results)
+    print(open(os.path.join(HERE, "RESULTS.md")).read())
+
+
+def write(corpus, results):
+    names = list(results)
+    L = ["# AES-256 across implementations", "",
+         "Generated by `python3 tools/crossimpl/run.py`. Every expected answer is computed by the compiled "
+         "Lean specification (`aes256`), the definitions the proofs are about.", "",
+         "| Implementation | Version |", "| --- | --- |"]
+    L += [f"| {n} | {results[n]['version']} |" for n in names]
+
+    def count(suite, n, check):
+        cases = corpus[suite]
+        got = results[n]["out"]
+        vals = [got.get((suite, c["id"])) for c in cases]
+        if all(v in (None, "NA") for v in vals):
+            return "n/a"
+        return f"{sum(1 for c, v in zip(cases, vals) if check(c, v))} / {len(cases)}"
+
+    L += ["", "## Agreement with the Lean specification", "",
+          "| Implementation | block (encrypt and decrypt) | ctr (counter boundaries) |", "| --- | --- | --- |"]
+    for n in names:
+        L.append(f"| {n} | {count('block', n, lambda c, v: v == c['expect'])} | "
+                 f"{count('ctr', n, lambda c, v: v == c['expect'])} |")
+
+    L += ["", "## CBC with PKCS #7 padding: malformed padding must be refused", "",
+          "| Case | " + " | ".join(names) + " |", "| --- | " + " | ".join("---" for _ in names) + " |"]
+    for c in corpus["cbc"]:
+        cells = []
+        for n in names:
+            v = results[n]["out"].get(("cbc", c["id"]))
+            if v in (None, "NA"):
+                cells.append("n/a")
+            elif c["valid"]:
+                cells.append("correct" if v == c["expect"] else ("**refuses**" if v.startswith("ERR") else "**WRONG**"))
+            else:
+                cells.append("refuses" if v.startswith("ERR") else "**ACCEPTS**")
+        L.append(f"| `{c['id']}` | " + " | ".join(cells) + " |")
+
+    L += ["", "## Disagreements", ""]
+    any_diff = False
+    for n in names:
+        for suite in ("block", "ctr"):
+            for c in corpus[suite]:
+                v = results[n]["out"].get((suite, c["id"]))
+                if v not in (None, "NA") and v != c["expect"]:
+                    any_diff = True
+                    L.append(f"- {n}, {suite} `{c['id']}`: expected `{c['expect']}`, got `{v}`")
+    if not any_diff:
+        L.append("None: every implementation gives Lean's answer on every block and ctr case.")
+    L += ["", "## What the differences are", "",
+          "- **Apple CommonCrypto's CTR counter is 64 bits wide.** With `kCCModeOptionCTR_BE` it increments "
+          "only the low 64 bits of the counter block and wraps there, leaving the high 64 bits alone; every "
+          "other implementation here carries across all 128 bits. Checked directly: from the counter "
+          "`aa…aa ff…ff`, CommonCrypto's second keystream block is AES of `aa…aa 00…00`, not "
+          "`aa…ab 00…00`. SP 800-38A (Appendix B.1) allows incrementing only part of the block, so both are "
+          "legal CTR, but they produce different ciphertexts once the low 64 bits wrap. With random IVs that "
+          "is rare; with a counter that starts near 2^64 it is immediate.",
+          "- **Apple CommonCrypto does not check PKCS #7 padding.** `CCCrypt` with `kCCOptionPKCS7Padding` "
+          "reads only the last byte: a value from 1 to 16 is stripped without checking the bytes before it "
+          "(`… 05 02` loses two bytes like a valid `02 02`), and a value of 0 or above 16 is left in place. "
+          "It returns success in every case, where RFC 5652 §6.3 has the recipient treat such input as "
+          "invalid. The other implementations with a PKCS #7 mode refuse all six malformed cases.",
+          "- Go's standard library and Nettle have no PKCS #7 unpadding, so their cbc column is n/a."]
+    open(os.path.join(HERE, "RESULTS.md"), "w").write("\n".join(L) + "\n")
+
+
+if __name__ == "__main__":
+    main()
